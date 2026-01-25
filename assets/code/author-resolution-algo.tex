@@ -1,0 +1,51 @@
+\begin{algorithm}[t]
+\caption{Authorial Provenance Resolution}
+\label{algo:author-resolution}
+\begin{footnotesize}
+\begin{algorithmic}[1]
+\Require Set of contract addresses $C_{tx}$, map from contract addresses to their creation traces $T_{creation}$, map for address metadata $M_{addr}$
+\Ensure The \texttt{author} field in $M_{addr}$ is populated for each contract in $C_{tx}$
+
+\State $D \gets \emptyset$ \Comment{Map from contract to its direct factory}
+
+\For{each contract $c \in C_{tx}$}
+    \If{$M_{addr}[c].author$ is not set}
+        \State $trace \gets T_{creation}[c]$
+        \State $init\_code \gets trace.input$
+        \State $cur \gets trace$
+        
+        \While{$cur$ has a parent \textbf{and} parent's input contains $init\_code$}
+            \State $cur \gets cur.parent$ \Comment{Traverse up the trace stack}
+        \EndWhile
+        
+        \If{$cur$ has no parent}
+            \State $M_{addr}[c].author \gets cur.from$ \Comment{Author is the sender}
+        \Else
+            \State $factory \gets cur.to$
+            \If{$M_{addr}[factory].author$ is set}
+                \State $M_{addr}[c].author \gets M_{addr}[factory].author$
+            \Else
+                \State $D[c] \gets factory$ \Comment{Record dependency}
+            \EndIf
+        \EndIf
+    \EndIf
+\EndFor
+
+\State \Comment{Resolve factory dependency chains using disjoint-set}
+\For{each contract $c$ in keys of $D$}
+    \State $root \gets \text{FindRoot}(c, D)$
+    \If{$M_{addr}[root].author$ is not set}
+        \State Recursively resolve author for $root$ \Comment{Self recursion}
+    \EndIf
+    \State $M_{addr}[c].author \gets M_{addr}[root].author$
+\EndFor
+
+\Function{FindRoot}{Contract $c$, DependencyMap $D$}
+    \If{$c \notin D$} \Return $c$ \EndIf
+    \State $root \gets \text{FindRoot}(D[c], D)$
+    \State $D[c] \gets root$ \Comment{Path compression for efficiency}
+    \State \Return $root$
+\EndFunction
+\end{algorithmic}
+\end{footnotesize}
+\end{algorithm}
