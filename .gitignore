@@ -1,0 +1,7 @@
+.agent
+.vscode
+
+build
+
+*.pdf
+*.code-workspace
