@@ -1,0 +1,54 @@
+\begin{algorithm}
+\caption{Smart Contract Reentrancy Detection}
+\label{algo:detect-reentrancy}
+\begin{footnotesize}
+\begin{algorithmic}[1]
+\Procedure{DetectReentrancy}{$callTrace$}
+    \State Initialize counters for contract visit tracking
+    \State Identify transaction sender
+    \State \Call{Traverse}{$callTrace, -1$}
+\EndProcedure
+
+\Function{Traverse}{$trace, senderDepth$}
+    \If{$trace.to$ is not a contract}
+        \State \Return no reentrancy
+    \EndIf
+    
+    \State $detected \gets senderDepth \neq -1$ \textbf{and} any contract in $trace.to$'s group was previously accessed
+    
+    \If{$trace$ has no subcalls}
+        \If{$detected$}
+            \State \Return current call stack
+        \Else
+            \State \Return no reentrancy
+        \EndIf
+    \EndIf
+
+    \If{$trace.from$ not in sender's group \textbf{and} $trace.to$ belongs to sender's group}
+        \State $newDepth \gets$ current depth
+    \Else
+        \State $newDepth \gets senderDepth$
+    \EndIf
+    
+    \State Update contract visit tracking counters
+    
+    \For{each subcall in $trace$}
+        \State Update current call stack
+        \State $result \gets$ \Call{Traverse}{subcall, $newDepth$}
+        \If{reentrancy detected in $result$}
+            \State \Return current call stack
+        \EndIf
+        \State Restore call stack
+    \EndFor
+    
+    \State Restore contract visit tracking counters
+    
+    \If{$detected$ \textbf{and} no reentrancy found in subcalls}
+        \State \Return current call stack
+    \EndIf
+    
+    \State \Return no reentrancy
+\EndFunction
+\end{algorithmic}
+\end{footnotesize}
+\end{algorithm}
