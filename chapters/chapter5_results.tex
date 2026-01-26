@@ -1,0 +1,332 @@
+\chapter{Results and Evaluation}
+\label{ch:results}
+
+This chapter presents findings from both the empirical investigation and \ToolName\ evaluation, demonstrating how manual and automated analysis provide complementary perspectives on the reentrancy threat landscape. We begin with qualitative insights from case studies, proceed to quantitative trend analysis, then present \ToolName's evaluation results. The chapter concludes by synthesizing insights from both approaches.
+
+% ============================================================================
+\section{Overview}
+\label{sec:results-overview}
+
+Our results span two complementary dimensions:
+
+\begin{itemize}
+    \item \textbf{Empirical findings}: Insights derived from manual analysis of \integer{ReentrancyCount} real-world reentrancy attacks, comprising qualitative case studies and quantitative trend analysis across seven dimensions
+
+    \item \textbf{Tool evaluation}: Assessment of \ToolName's accuracy, false positive rate, and performance, validating the automated approach against ground-truth data
+\end{itemize}
+
+These perspectives reinforce each other: the empirical findings establish the ground truth that validates \ToolName, while \ToolName\ enables large-scale analysis that extends empirical observations.
+
+% ============================================================================
+\section{Qualitative Analysis: Attack Patterns in the Wild}
+\label{sec:results-qualitative}
+
+Through detailed case study analysis, we identified several recurring patterns and insights that characterize modern reentrancy attacks. Table~\ref{tab:1} summarizes the case studies presented in this section.
+
+\input{assets/tables/qualitative-table}
+
+\subsection{Persistent Classic Vulnerabilities}
+\label{sec:results-classic}
+\label{case-study:1}
+
+Despite widespread awareness and educational resources~\cite{solidity-security-considerations, checks-effects-interactions}, the simplest form of reentrancy---the pattern exemplified by the DAO attack---continues to be exploited in modern DApps.
+
+\textbf{Case Study: ChainPaint (February 2024).} ChainPaint, a Web3 game, suffered a reentrancy attack resulting in approximately \$52,500 in losses. The vulnerability resided in the game's auction system, where participants updated bids via the \lstinline{Auction.makeBid} function. This function first refunded the previous bid using \lstinline{call.value}, then updated the bid to the new amount---a direct violation of the CEI pattern. By placing a higher bid and exploiting their contract's \lstinline{fallback} function, the attacker recursively re-entered \lstinline{Auction.makeBid}, draining all accumulated bids.
+
+This case demonstrates that basic reentrancy patterns remain relevant eight years after the DAO attack, underscoring the gap between security awareness and implementation practice.
+
+\subsection{Callbacks as Design Features}
+\label{sec:results-callbacks}
+\label{case-study:2}
+\label{case-study:3}
+
+An increasing number of modern protocols explicitly provide callback hooks for business logic or flexibility. While such designs can be legitimate, they complicate reentrancy detection and create new attack surfaces.
+
+\textbf{Case Study: Flash Loan Vulnerabilities (2022--2023).} Peapods Finance (December 2023), 0x0 (October 2023), and DFX Finance (November 2022) all suffered reentrancy attacks due to unprotected flash loan functions. These contracts lacked effective reentrancy guards and verified loan repayment merely through balance checks. Attackers exploited this by \textit{depositing} borrowed tokens back into the contract during reentrancy rather than \textit{repaying} them. The contracts credited both the deposit and cleared the debt---allowing the same tokens to serve dual purposes and enabling unauthorized withdrawals.
+
+Flash loans inherently require transferring control to the caller, making external calls a core feature rather than a bug. This legitimate use of callbacks for business logic necessitates careful guard implementation.
+
+\textbf{Case Study: Predy Finance (May 2024).} Predy Finance introduced a custom callback hook, \lstinline{predyAfterTradeCallback}, invoked after token transfers in \lstinline{PredyPool.trade}. Additionally, it offered \lstinline{PredyPool.take}---a deliberately reenterable function allowing arbitrary token transfers. While intended for legitimate use, inadequate safeguards on token pair registration allowed attackers to target tokens belonging to other users, resulting in approximately \$460,000 in losses.
+
+This case illustrates the risks of intentionally reenterable designs: the boundary between feature and vulnerability becomes dangerously thin.
+
+\subsection{Non-Obvious State Dependencies}
+\label{sec:results-state}
+\label{case-study:4}
+\label{case-study:5}
+
+Traditional reentrancy defenses focus on accounting variables like balances and debts. However, attackers have exploited variables that appear unrelated to financial state but indirectly influence critical logic.
+
+\textbf{Case Study: Revest Finance (March 2022).} Revest Finance was exploited in a reentrancy attack resulting in approximately \$2.01 million in losses. The vulnerable variable was not tied to balances but tracked the number of minted NFTs (\lstinline{FNFTHandler.fnftsCreated}). This ID counter was incremented only after minting completed. The attacker exploited reentrancy through \lstinline{onERC1155Received}---triggered after FNFT transfer---while the counter remained stale. During reentrancy, the same ID was assigned to a new FNFT, overwriting the original's data including associated token amounts.
+
+\textbf{Case Study: Omni Protocol (July 2022).} Omni Protocol suffered a \$1.4 million exploit where the critical variable was not a direct financial balance. The vulnerability lay in \lstinline{Pool.withdrawERC721}, which returned user-supplied NFTs. NFTs could also serve as collateral for borrowing. The collateral check occurred after NFT transfer and relied on \lstinline{userConfig.isUsingAsCollateral}. Because ERC-721 includes the \lstinline{onERC721Received} hook, the attacker used it to invoke \lstinline{Pool.liquidationERC721}, manipulating collateral status and bypassing validation.
+
+These cases highlight the need for comprehensive state analysis---any variable that influences financial logic, however indirectly, requires protection.
+
+\subsection{Reentrancy as Rug Pull Mechanism}
+\label{sec:results-rugpull}
+\label{case-study:6}
+
+While most reentrancy attacks are attributed to external hackers, some incidents suggest deliberate introduction by developers themselves---a form of malicious insider attack known as a ``rug pull''~\cite{rug-pull-report}.
+
+\textbf{Case Study: BNB Brokers and Barley Finance (2022, 2024).} BNB Brokers (April 2022) and Barley Finance (January 2024) were attacked using reentrancy vulnerabilities that closely mirrored the original DAO pattern and unprotected flash loans, respectively. In both cases, the projects' social media accounts were abruptly deleted, websites taken offline, and no further contract activity occurred. These suspicious behaviors strongly suggest premeditated rug pulls by the developers~\cite{bnb-brokers-newsletter, attack-report:barley-finance}.
+
+This pattern reveals reentrancy's potential as an intentional backdoor, complicating attribution and detection.
+
+\subsection{Access Control Failures}
+\label{sec:results-access}
+\label{case-study:7}
+
+Modern DeFi protocols often expose administrative functions for inter-contract interaction or manual operation. Insufficient access control on these functions can enable reentrancy exploitation.
+
+\textbf{Case Study: GoodDollar (December 2023).} GoodDollar experienced a sophisticated cross-contract \textbf{price manipulation} attack, enabled by insufficient access control, resulting in approximately \$630,000 in losses. The attacker targeted \lstinline{GoodFundManager.collectInterest}, originally intended for developers to collect interest from staking. The collected interest would be deposited into Compound to obtain cDAI, then added to GoodDollar's pool, minting G\$X tokens and causing slight appreciation.
+
+However, \lstinline{collectInterest} was declared public and accessible to anyone. Through reentrancy, the attacker deposited a large amount of cDAI, deceiving the contract into treating it as interest income and artificially inflating G\$X's value. The attacker then sold pre-acquired G\$X tokens to realize profit.
+
+\subsection{Infrastructure-Level Vulnerabilities}
+\label{sec:results-infrastructure}
+\label{case-study:8}
+\label{case-study:9}
+
+Reentrancy vulnerabilities can exist not only in application smart contracts but also in the underlying infrastructure---compilers, protocols, and blockchain implementations.
+
+\textbf{Case Study: Curve (July 2023).} Curve, one of Ethereum's leading DEXs, was exploited in a reentrancy attack resulting in approximately \$60.7 million in losses~\cite{attack-report:curve}. The attacker invoked \lstinline{add_liquidity} during \lstinline{remove_liquidity} execution, before balance and supply updates. Notably, Curve's developers had implemented reentrancy guards for these functions, but a bug in the Vyper compiler rendered them ineffective~\cite{vul-report:vyper}. The vulnerability coincided with Curve's deployment of an upgraded contract compiled using the affected Vyper version.
+
+\textbf{Case Study: Terra Network (July 2024).} Terra Network suffered a \$4.58 million reentrancy exploit~\cite{attack-report:terra} rooted in Terra's implementation of the Inter-Blockchain Communication (IBC) protocol for cross-chain interactions. The attacker recursively triggered \lstinline{MsgTimeout} to exploit a flaw in the protocol's timeout logic, causing the blockchain to mint additional tokens without asset backing. This remains the only documented cross-chain reentrancy attack.
+
+These cases underscore that security responsibility extends beyond application developers to infrastructure maintainers.
+
+% ============================================================================
+\section{Quantitative Analysis: The Evolving Threat Landscape}
+\label{sec:results-quantitative}
+
+Beyond qualitative insights, our empirical analysis examines trends across seven dimensions, revealing the evolution of reentrancy attacks over time.
+
+\subsection{Blockchain Network Distribution}
+\label{sec:results-network}
+
+Figure~\ref{fig:blockchain-network} illustrates the distribution of reentrancy attacks across blockchain networks (outer ring) alongside relative Total Value Locked (inner ring).
+
+Despite proliferation of EVM-compatible chains, reentrancy attacks remain predominantly concentrated on Ethereum, accounting for 52.7\% of documented incidents. BNB Smart Chain, Polygon, and Arbitrum are also frequent targets (18.9\%, 9.5\%, and 9.5\%, respectively). This distribution strongly correlates with network TVL, supporting the hypothesis that attackers prioritize high-value targets for greater potential returns.
+
+\insightbox{Blockchain Network}{Reentrancy attacks concentrate on high-value networks, particularly those with substantial TVL. Ethereum alone accounts for more than half of all documented incidents.}
+
+
+\fig[0.6]{blockchain-network}{Distribution of reentrancy attacks by blockchain network}
+
+\subsection{Reentrancy Scope Evolution}
+\label{sec:results-scope}
+
+Figure~\ref{fig:reentrancy-scope} shows the distribution of attacks by scope. Early attacks were predominantly single-function, but as defensive mechanisms evolved, attackers increasingly adopted broader scopes.
+
+Cross-function reentrancy has now surpassed single-function, accounting for 42.3\% of recorded attacks compared to 36.6\% for single-function incidents. Cross-contract and cross-project reentrancy, despite academic prominence, constitute 21.1\% of cases. The read-only variant, while less frequent, represents a particularly evasive pattern.
+
+These findings underscore a critical gap in developer awareness: single-function and many cross-function vulnerabilities can be effectively mitigated using reentrancy guards, yet attacks continue.
+
+\insightbox{Reentrancy Scope}{Cross-function attacks now dominate (42.3\%), followed by single-function (36.6\%). Higher-scope attacks represent 21.1\%---notable but less common.}
+
+\fig[0.6]{reentrancy-scope}{Distribution of reentrancy attacks by scope}
+
+\subsection{Entry Point Diversification}
+\label{sec:results-entry}
+
+The entry point refers to the function within the attacker's contract invoked by the victim during exploitation. We classify entry points into four types:
+
+\begin{enumerate}
+    \item \textbf{Fallback}: Default function triggered when no signature matches
+    \item \textbf{Malicious Token}: ERC-20 functions in attacker-controlled tokens
+    \item \textbf{ERC Hook}: Callbacks defined by token standards (ERC-721, ERC-777, ERC-1155)
+    \item \textbf{Application Hook}: Custom callbacks implemented by specific projects
+\end{enumerate}
+
+Figure~\ref{fig:entry-point} shows the temporal evolution of entry points. Early attacks primarily exploited the \lstinline{fallback} function triggered during native token transfers via \lstinline{call.value}. Although \lstinline{fallback} remains relevant (see Section~\ref{sec:results-classic}), attackers have increasingly employed malicious tokens since around 2020 and ERC hooks have become popular vectors. By late 2022, application-specific hooks emerged as a notable trend.
+
+Overall, \lstinline{fallback} and ERC hooks are most frequently exploited (29.6\% and 28.2\%), with application hooks and malicious tokens comprising 24.0\% and 18.3\%, respectively.
+
+\insightbox{Entry Point}{Attack entry points have diversified from \lstinline{fallback} functions to malicious tokens, ERC hooks, and application hooks. Despite evolution, \lstinline{fallback} and ERC hooks each account for nearly 30\% of incidents.}
+
+\fig[0.7]{entry-point}{Evolution of attack entry points over time}
+
+\subsection{Financial Impact Assessment}
+\label{sec:results-financial}
+
+Fund loss refers to the market value of stolen tokens at attack time. Figure~\ref{fig:fund-loss} illustrates fund losses over time, excluding white-hat attacks.
+
+Losses range from under \$1,000 to nearly \$80 million (Fei Protocol). For comparison, the DAO attack caused losses of approximately \$60 million, though the attacker's realized profit was substantially lower due to the Ethereum hard fork~\cite{the-dao-analysis}.
+
+Despite ongoing attack prevalence, average fund loss per incident has exhibited a steady downward trend since mid-2022. Similarly, aggregate monthly losses plateaued and began declining. A brief spike in mid-2023---primarily due to the Curve attack~\cite{attack-report:curve}---does not contradict the overall trajectory.
+
+Potential factors may include increased competition among attackers, improved security awareness, and ecosystem expansion diluting average project value; however, we cannot establish causation from this observational data.
+
+\fig[0.8]{fund-loss}{Fund loss over time}
+
+\insightbox{Fund Loss}{Individual losses vary widely (\$1K to \$80M). Since mid-2022, average losses have declined, indicating reduced financial impact per incident.}
+
+\subsection{Attack Strategy Taxonomy}
+\label{sec:results-strategy}
+
+We identified seven distinct strategies employed by attackers, offering granular understanding of exploitation methodologies. These categories emerged through iterative clustering of observed attack patterns; while boundaries can appear ambiguous, each category represents a mutually exclusive fundamental exploitation mechanism. Figure~\ref{fig:attack-strategy} shows the distribution, with the three most dominant strategies comprising 74.3\% of attacks.
+
+\fig[0.7]{attack-strategy}{Distribution of attack strategies}
+
+\textbf{Price Manipulation} (most prevalent): Attackers exploit stale variables in price calculations to cause dramatic token value swings. Leveraging flash loans for capital and reentrancy for timing, attackers can achieve manipulation rarely possible in traditional markets. Notably, this was the sole strategy in all cross-project reentrancy cases.
+
+\textbf{Reentrant Withdrawal}: Attackers recursively withdraw funds before balance updates, the classic DAO pattern. While frequency has declined, this strategy accounts for 14 attacks and remains the second most common.
+
+\textbf{Balance Deception}: Attackers exploit insufficient balance verification. Post-transfer checks are manipulated to deceive contracts into believing conditions have been met, as seen in the flash loan cases (Section~\ref{sec:results-callbacks}).
+
+\textbf{Configuration Manipulation}: Attackers exploit improperly safeguarded on-chain configuration values. Examples include NFT minting bypasses and FNFT data overwrites.
+
+\textbf{Reentrant Deposit}: The conceptual opposite of reentrant withdrawal---attackers recursively deposit to accumulate multiple credits for a single deposit when balance is calculated via pre/post-transfer difference.
+
+\textbf{Reentrant Borrow}: Attackers exploit lending protocols to bypass borrowing limits, using malicious collateral tokens to redeem collateral after repayment.
+
+\textbf{Impersonation}: Attackers exploit insufficient access control to impersonate privileged roles, as seen in the Abracadabra Money case.
+
+\insightbox{Attack Strategy}{Price Manipulation is most prevalent. Reentrant Withdrawal remains widely studied but declining. Balance Deception targets flawed balance checks. Together, these three strategies account for 74.3\% of attacks.}
+
+\subsection{Vulnerability Origin Analysis}
+\label{sec:results-origin}
+
+While most victims suffer from flaws in their own code, vulnerabilities can originate externally. Our analysis identifies eleven examples of external vulnerability origins.
+
+\fig[0.7]{vulnerability-origin}{Distribution of vulnerability origins}
+
+\textbf{Compound}: A foundational lending protocol whose codebase has been widely forked. Earlier versions contained reentrancy vulnerabilities patched in June 2022. Compound itself avoided exploitation through rigorous token vetting, but projects forking older versions became susceptible.
+
+\textbf{Curve}: Its price oracle, widely used by dependent projects, contained a read-only reentrancy vulnerability. Projects relying on this feed became vulnerable to price manipulation.
+
+\textbf{SushiSwap}: A well-known Uniswap fork. Its \lstinline{MasterChef.emergencyWithdraw} function contains a clear reentrancy vulnerability enabling reentrant withdrawals.
+
+\textbf{Balancer}: Another established AMM whose price oracle was affected by read-only reentrancy, exposing dependent projects.
+
+\insightbox{Vulnerability Origin}{Some projects inherit vulnerabilities from popular protocols (Compound, SushiSwap) or face exploitation via external oracles (Curve, Balancer). This highlights risks of forking and external dependencies.}
+
+\subsection{Attack Timeline Analysis}
+\label{sec:results-timeline}
+
+Analysis of timestamps for vulnerable contract deployments, attack contract deployments, and first exploit transactions reveals that vulnerability exposure time---the interval between deployment and first exploit---is \textit{remarkably short}.
+
+\fig[0.7]{attack-timeline}{Attack timeline showing deployment and exploitation patterns}
+
+The median exposure time is 50.9 days, with extreme cases occurring within hours. This is surprising given attack sophistication, which often takes security firms days to analyze post-incident. This suggests either exceptional attacker skill or pre-deployment vulnerability identification through channels like GitHub repositories.
+
+Another notable trend: attackers increasingly deploy malicious contracts directly within exploit transactions (highlighted in red in Figure~\ref{fig:attack-timeline}). This evolution renders preemptive detection methods~\cite{attack-contract-detection, backrunner} ineffective, as no attack contract exists to analyze before exploitation.
+
+\insightbox{Attack Timeline}{Median exploitation time is 50.9 days; some attacks occur within hours. Attackers increasingly deploy malicious contracts within exploit transactions, bypassing preemptive detection.}
+
+% ============================================================================
+\section{Validating Automated Analysis: \ToolName\ Evaluation}
+\label{sec:results-tool}
+
+Having established the attack landscape through manual analysis, we now evaluate \ToolName's ability to automate this process. Our evaluation addresses three research questions:
+
+\begin{itemize}
+    \item \textbf{RQ1}: How accurately can \ToolName\ identify and characterize known exploits?
+    \item \textbf{RQ2}: What is the false positive rate on benign transactions?
+    \item \textbf{RQ3}: Is analysis latency suitable for practical application?
+\end{itemize}
+
+\subsection{Experimental Setup}
+
+\textbf{Datasets.} We evaluate using two datasets:
+\begin{itemize}
+    \item \textbf{Ground-Truth Exploit Dataset}: The \integer{AllTotal} exploit transactions from \integer{ReentrancyCount} confirmed attacks, with manual classifications as oracle
+    \item \textbf{Random Transaction Dataset}: \integer{FpDatasetSize} transactions randomly sampled from \integer{FpChainCount} chains (2021--2024)
+\end{itemize}
+
+\textbf{Environment.} Experiments were conducted on a machine with AMD Ryzen 7 5800H CPU and 64 GB RAM, running Windows 11. All data was pre-cached to isolate algorithmic performance from network latency.
+
+\textbf{Metrics.} We evaluate detection recall (successful reentrancy identification), characterization accuracy (correct scope and entry point classification), false positive rate, and analysis latency.
+
+\subsection{RQ1: Detection and Characterization Accuracy}
+
+Of the \integer{ReentrancyCount} incidents, five were excluded: three lacked sufficient transaction data, and two occurred on unsupported blockchains (Fuse and Fantom). This left \integer{FirstEvaluable} incidents for evaluation.
+
+\input{assets/tables/accuracy-results}
+
+Table~\ref{tb:accuracy-results} presents the results. On first-exploit transactions, \ToolName\ achieved:
+\begin{itemize}
+    \item \textbf{Detection recall}: \FirstRecall\ (\integer{FirstDetected} of \integer{FirstEvaluable})
+    \item \textbf{Characterization recall}: \FirstCategorizationRecall\ (\integer{FirstCategorized} of \integer{FirstDetected} correctly detected)
+\end{itemize}
+
+On the complete all-exploits dataset (\integer{AllEvaluable} transactions):
+\begin{itemize}
+    \item \textbf{Detection recall}: \AllRecall
+    \item \textbf{Characterization recall}: \AllCategorizationRecall
+\end{itemize}
+
+\textbf{Failure Analysis.} We manually inspected the three incidents \ToolName\ failed to detect:
+
+\begin{itemize}
+    \item \textbf{GoodDollar and Penpie}: Attackers deliberately obscured authorial provenance by using distinct, unrelated EOAs for contract deployment and exploit initiation. This breaks our address grouping heuristic, which assumes contracts of different authors belong to different parties.
+
+    \item \textbf{EraLand}: This attack occurred on zkSync, which implements native account abstraction~\cite{zksync-account-abstraction}. This feature allows the transaction sender to be a smart contract, blurring the EOA/contract distinction fundamental to our detection algorithm.
+\end{itemize}
+
+These failures represent fundamental challenges rather than algorithmic deficiencies: the GoodDollar/Penpie cases require off-chain information unavailable through our methodology, while EraLand represents an architectural edge case unique to account abstraction chains.
+
+The single characterization failure (Sturdy Finance) stems from a subtle definitional issue regarding read-only reentrancy with price oracle manipulation. \ToolName\ correctly identified cross-function scope based on the formal pattern, while manual classification used cross-contract based on semantic interpretation.
+
+Notably, \ToolName\ identified an error in our original manual classification: the DeltaPrime attack was categorized as cross-contract but is actually cross-function. This demonstrates automation's potential to exceed manual accuracy.
+
+\subsection{RQ2: False Positive Analysis}
+
+We applied \ToolName\ to the random transaction dataset. As shown in Figure~\ref{fig:fp-evaluation-result}, \ToolName\ flagged \integer{FpReentrancyCount} transactions---a positive rate of approximately 0.07\%.
+
+\fig[0.8]{fp-evaluation-result}{False positive analysis across blockchains}
+
+We performed statistical analysis and manually inspected a representative sample (100 application hook cases and all \integer{FpFpCount} cases using other entry points).
+
+The vast majority of flagged cases are \textbf{legitimate uses of reentrancy} rather than algorithmic false positives. \ToolName\ correctly identified reentrant flows, but the intent was benign. Two patterns emerged:
+
+\begin{itemize}
+    \item \textbf{Legitimate Cross-Contract Reentrancy}: The dominant pattern involved application hooks with cross-contract scope. This corroborates our empirical observation that reentrancy can be a deliberate design choice. Notably, we found instances in transactions interacting with protocols as old as Uniswap V2 (May 2020), indicating benign reentrancy has a much longer history than previously understood.
+
+    \item \textbf{Deployer Interactions}: For \integer{FpFpCount} cases using other entry points, none were malicious. These represented contract deployers interacting with their own contracts as normal users---an edge case where our authorial provenance heuristic causes misclassification.
+\end{itemize}
+
+We consider only the deployer interaction cases as true false positives, yielding a rate of approximately $10^{-5}$. The legitimate reentrancy cases are correct detections of non-malicious patterns---an important distinction, as \ToolName\ detects reentrancy patterns rather than malicious intent. Determining whether a detected pattern constitutes an attack requires additional context beyond on-chain data.
+
+\subsection{RQ3: Performance Analysis}
+
+Figure~\ref{fig:performance} shows analysis latency across threads for both attack and benign transactions.
+
+\fig[0.8]{performance}{Analysis latency with varying thread counts}
+
+With a single thread, average analysis time was 111.6 ms for attack transactions. Latency decreases with additional threads, saturating at 4 threads with an average of 80.1 ms.
+
+For benign reentrancy in the random dataset, typical latency is \textbf{\integer{Latency} ms}. Non-reentrancy transactions are faster still. This indicates attack transactions are more complex than benign reentrancy.
+
+Given Ethereum's 15--20 average transactions per second~\cite{eth-chart}, an allowance of approximately 50 ms per transaction is available for real-time processing. \ToolName's typical \integer{Latency} ms latency demonstrates feasibility for real-time integration, assuming local node deployment (standard practice for production monitoring systems, eliminating network latency for trace retrieval).
+
+% ============================================================================
+\section{Synthesis: Complementary Insights}
+\label{sec:results-synthesis}
+
+Manual and automated analysis provide complementary perspectives that neither could achieve alone. This section synthesizes key insights from both approaches.
+
+\subsection{Validation of Empirical Classifications}
+
+\ToolName's high accuracy validates our empirical methodology. The 95.5\% detection recall and 98.5\% characterization accuracy demonstrate that manual classifications can be reliably reproduced algorithmically. Moreover, \ToolName\ identified a classification error in our manual work (DeltaPrime), suggesting automation may actually improve accuracy.
+
+\subsection{Discovery of Long-Standing Legitimate Reentrancy}
+
+Through large-scale false positive analysis, \ToolName\ revealed that legitimate reentrancy patterns have existed since at least Uniswap V2's launch in May 2020---much earlier than recognized in prior work. This finding extends our qualitative observation about callbacks as design features (Section~\ref{sec:results-callbacks}), demonstrating that benign reentrancy is widespread and has a longer history than attacks themselves.
+
+\subsection{Complementary Coverage}
+
+Table~\ref{tab:complementary} summarizes how manual and automated analysis complement each other.
+
+\input{assets/tables/complementary-insights.tex}
+
+% ============================================================================
+\section{Chapter Summary}
+\label{sec:results-summary}
+
+Our empirical analysis reveals that reentrancy attacks have evolved significantly: cross-function scope now dominates (42.3\%), entry points have diversified beyond fallback functions, and attackers increasingly deploy contracts within exploit transactions (median exploitation time: 50.9 days). Classic vulnerabilities persist, callbacks blur the line between feature and vulnerability, and reentrancy serves as mechanism for both external attacks and insider rug pulls.
+
+\ToolName\ achieves \FirstRecall\ detection recall and \FirstCategorizationRecall\ characterization accuracy, with false positive rate below $10^{-5}$ and typical latency of \integer{Latency} ms. The tool's ability to identify an error in our manual classification (DeltaPrime) suggests automation can match or exceed human accuracy for well-defined tasks.
+
+The synthesis of manual and automated perspectives yields insights neither could achieve alone---notably, that legitimate reentrancy patterns have existed since at least May 2020, predating the surge of malicious attacks.

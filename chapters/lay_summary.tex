@@ -1,0 +1,10 @@
+% Lay Summary - Plain language summary for general audience
+Blockchain technology allows people to conduct financial transactions without relying on banks or other intermediaries. A key innovation called ``smart contracts'' enables automated agreements that execute when certain conditions are met. Unfortunately, these smart contracts can contain security flaws that attackers exploit to steal funds.
+
+One particularly dangerous type of attack is called a ``reentrancy attack.'' In simple terms, this occurs when an attacker tricks a smart contract into sending money multiple times before the contract realizes it has already made a payment. Since 2016, these attacks have resulted in hundreds of millions of dollars in losses.
+
+This thesis investigates reentrancy attacks through two main contributions. First, we conducted the most comprehensive study of real-world reentrancy attacks to date, analyzing 73 confirmed incidents over eight years. We discovered that these attacks have become more sophisticated over time, with attackers using increasingly creative methods to exploit vulnerabilities.
+
+Second, we developed a software tool called ReSect that automatically analyzes blockchain transactions to detect and characterize reentrancy attacks. Previously, security experts had to manually investigate each suspicious transaction---a process that could take days or weeks. Our tool completes this analysis in milliseconds with high accuracy.
+
+Our research provides valuable insights for blockchain developers seeking to protect their applications, security auditors reviewing smart contracts, and researchers developing new defense mechanisms. By understanding how these attacks work and providing tools to study them efficiently, we contribute to making blockchain technology safer for everyone.

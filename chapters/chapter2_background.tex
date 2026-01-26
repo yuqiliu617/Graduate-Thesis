@@ -1,0 +1,208 @@
+\chapter{Background}
+\label{ch:background}
+
+This chapter provides the technical foundation necessary to understand the research presented in this thesis. We introduce blockchain technology and smart contracts, describe the decentralized finance ecosystem where reentrancy attacks predominantly occur, formally define reentrancy vulnerabilities and their classification, present the transaction analysis infrastructure that underlies both manual and automated investigation, and conclude with historical context surrounding the DAO attack.
+
+% ============================================================================
+\section{Blockchain and Smart Contract Fundamentals}
+\label{sec:bg-blockchain}
+
+\subsection{Decentralized Systems and Consensus}
+
+Blockchain technology enables decentralized, transparent record-keeping by distributing data across a network of nodes that collectively validate and maintain a shared ledger. Unlike centralized systems where a single authority controls data integrity, blockchains achieve consensus through cryptographic protocols that ensure all participants agree on the ledger's state without requiring mutual trust.
+
+Each block in the chain contains a set of validated transactions and a cryptographic hash of the previous block, creating an immutable chain of records. This structure ensures that altering any historical transaction would require recomputing all subsequent blocks---a computationally infeasible task in a sufficiently decentralized network.
+
+\subsection{Ethereum and the EVM Architecture}
+
+Ethereum~\cite{ethereum-whitepaper}, launched in 2015, extended blockchain's capabilities beyond simple value transfer by introducing a Turing-complete virtual machine: the Ethereum Virtual Machine (EVM). The EVM executes bytecode stored on the blockchain, enabling arbitrary computational logic to be deployed and executed in a decentralized manner.
+
+Ethereum's success has spawned numerous EVM-compatible blockchains (\eg BNB Smart Chain, Polygon, Arbitrum) that maintain bytecode compatibility while offering different trade-offs in terms of throughput, transaction costs, and decentralization. As of this writing, over 1,500 EVM-compatible chains exist~\cite{chainlist}, creating a diverse but interconnected ecosystem. Key metrics for evaluating these networks include \textit{market capitalization} (the total value of minted cryptocurrencies) and \textit{total value locked} (TVL)---the aggregate value of assets deposited in decentralized protocols~\cite{coingecko}.
+
+\subsection{Smart Contract Execution Model}
+
+A \textit{smart contract} is a program stored on the blockchain at a specific address that can receive, store, and transfer value while executing arbitrary logic. When a user (or another contract) sends a transaction to a contract address, the EVM executes the contract's bytecode based on the provided input data.
+
+Smart contracts maintain persistent state through \textit{storage}---a key-value mapping preserved across transactions. The execution model follows these principles:
+
+\begin{itemize}
+    \item \textbf{Atomicity}: Each transaction either completes entirely or reverts to the original state if any operation fails
+    \item \textbf{Determinism}: Given the same state and input, execution always produces the same output
+    \item \textbf{Gas-metered computation}: Each operation consumes ``gas,'' a unit of computational resource, preventing infinite loops and denial-of-service attacks
+\end{itemize}
+
+Crucially for this research, smart contracts can invoke other contracts through \textit{external calls}. These calls transfer execution control to the target contract, which may itself make further calls, creating potentially deep call stacks. It is within these external calls that reentrancy vulnerabilities emerge.
+
+\subsection{Transaction Lifecycle}
+
+A transaction's lifecycle proceeds through several stages:
+\begin{enumerate}
+    \item A user signs a transaction specifying the target address, value (if any), and input data
+    \item The transaction enters the memory pool where validators select it for inclusion
+    \item Upon execution, the EVM processes the transaction, updating contract states as specified
+    \item The final state changes are committed to the blockchain and become immutable
+\end{enumerate}
+
+From a security analysis perspective, the key insight is that all state changes are visible on-chain after transaction completion. The complete sequence of operations---every function call, every state modification---can be reconstructed through debugging endpoints, enabling the post-mortem analysis techniques central to this thesis.
+
+% ============================================================================
+\section{The DeFi Ecosystem}
+\label{sec:bg-defi}
+
+Decentralized Finance (DeFi) refers to the ecosystem of financial applications built on blockchain technology. These protocols aim to provide traditional financial services---lending, trading, insurance---without centralized intermediaries. The composability of smart contracts allows DeFi protocols to build upon each other, creating complex financial instruments but also introducing systemic risks when vulnerabilities propagate through interconnected systems.
+
+\subsection{Token Standards}
+
+Tokens are the fundamental assets of DeFi, representing various utilities, values, or rights. The Ethereum community has established several token standards that define common interfaces:
+
+\begin{itemize}
+    \item \textbf{ERC-20}~\cite{erc20}: The foundational standard for fungible tokens, defining functions like \lstinline{transfer}, \lstinline{transferFrom}, and \lstinline{approve} for token movement and delegation
+    
+    \item \textbf{ERC-721}~\cite{erc721}: The standard for non-fungible tokens (NFTs), with hooks like \lstinline{onERC721Received} that notify recipients of token transfers
+    
+    \item \textbf{ERC-777}~\cite{erc777}: An extended token standard with \lstinline{tokensReceived} and \lstinline{tokensToSend} hooks that enable recipients and senders to react to transfers
+    
+    \item \textbf{ERC-1155}~\cite{erc1155}: A multi-token standard supporting both fungible and non-fungible tokens, with \lstinline{onERC1155Received} callbacks
+\end{itemize}
+
+The callback mechanisms in ERC-721, ERC-777, and ERC-1155 are particularly relevant to reentrancy attacks, as they provide controlled entry points for external code execution during token operations.
+
+\subsection{Decentralized Exchanges and Market Makers}
+
+Decentralized exchanges (DEXs) enable trustless token trading without centralized order books. Most DEXs employ \textit{automated market maker} (AMM) protocols, which use mathematical formulas to price assets based on the ratio of tokens in liquidity pools. Prominent examples include Uniswap, Curve, and Balancer.
+
+AMMs introduce important concepts for understanding reentrancy attacks:
+\begin{itemize}
+    \item \textbf{Liquidity pools}: Smart contracts holding pairs of tokens that enable trading
+    \item \textbf{Price curves}: Mathematical formulas (\eg $x \cdot y = k$) determining exchange rates
+    \item \textbf{Slippage}: Price changes during transaction execution as pool ratios shift
+\end{itemize}
+
+The price calculation mechanisms in AMMs are frequently exploited in reentrancy attacks through \textit{price manipulation}---a strategy where attackers artificially inflate or deflate token prices by exploiting stale state during reentrancy.
+
+\subsection{Flash Loans}
+
+Flash loans represent a DeFi innovation enabling users to borrow arbitrary amounts without collateral, provided the full amount is repaid within the same transaction. This atomicity guarantees lender safety: if repayment fails, the entire transaction reverts, and no funds leave the lending contract.
+
+Flash loans enable sophisticated strategies like arbitrage and liquidation, but they also amplify attack capabilities. Attackers can borrow large amounts of capital to execute attacks that would otherwise be economically infeasible, returning the funds (minus profit extracted from the victim) before the transaction completes.
+
+Several reentrancy attacks in our dataset involve flash loan providers with insufficient reentrancy protection, as discussed in Chapter~\ref{ch:results}.
+
+\subsection{Protocol Composability and Dependencies}
+
+DeFi protocols frequently interact with and depend upon each other. A lending protocol might use a DEX's price oracle for collateral valuation; a yield aggregator might deposit funds across multiple protocols to optimize returns. This composability enables powerful financial primitives but creates dependency chains where vulnerabilities can propagate.
+
+Of particular relevance to reentrancy are \textit{price oracles}---contracts that provide token price information to other protocols. If an oracle reads prices during an ongoing transaction before state is finalized, it may return stale values that attackers can exploit. This pattern underlies \textit{read-only reentrancy} attacks discussed in Section~\ref{sec:bg-classification}.
+
+% ============================================================================
+\section{Reentrancy: Definition and Classification}
+\label{sec:bg-reentrancy}
+
+\subsection{Formal Definition}
+
+A reentrancy vulnerability arises when a contract makes an external call to an untrusted address before updating its own state, allowing the called contract to ``re-enter'' the original contract while it is in an inconsistent state. This violates the \textit{Checks-Effects-Interactions} (CEI) pattern, which prescribes:
+\begin{enumerate}
+    \item \textbf{Checks}: Validate all conditions and requirements
+    \item \textbf{Effects}: Update the contract's internal state
+    \item \textbf{Interactions}: Make external calls to other contracts
+\end{enumerate}
+
+When interactions occur before effects, external contracts can re-invoke the vulnerable contract, which will perform checks against stale state and potentially allow unauthorized operations.
+
+\input{assets/code/reentrancy-example-code}
+
+Listing~\ref{listing:reentrancy-example} illustrates a canonical reentrancy vulnerability. The \lstinline{Victim} contract transfers Ether before updating the sender's balance. When the \lstinline{Attacker} contract receives Ether, its \lstinline{fallback} function re-invokes \lstinline{withdraw}. Since the balance has not been decremented, the check passes repeatedly, draining the victim's funds.
+
+Formally, the fundamental pattern of a reentrancy attack can be expressed as:
+\begin{equation}
+V_1.f_{V_1} \rightarrow A.f_{A} \rightarrow V_2.f_{V_2}
+\label{eq:reentrancy-pattern}
+\end{equation}
+where $V_1$ and $V_2$ represent victim contracts, $A$ denotes an attacker-controlled contract, $f$ represents functions within respective contracts, the dot operator indicates membership, and the arrow signifies direct or indirect invocation. An attack occurs when a victim contract function ($V_1.f_{V_1}$) invokes an attacker-controlled function ($A.f_A$), which in turn re-enters a victim contract function ($V_2.f_{V_2}$) before the original invocation completes.
+
+\subsection{Scope-Based Classification}
+\label{sec:bg-classification}
+
+Reentrancy attacks are commonly classified by their \textit{scope}---the relationship between the initial victim function and the re-entered function:
+
+\begin{itemize}
+    \item \textbf{Single-function reentrancy}: $V_1 = V_2$ and $f_{V_1} = f_{V_2}$; the same function is re-entered. This is the classic pattern exemplified by the DAO attack.
+    
+    \item \textbf{Cross-function reentrancy}: $V_1 = V_2$ and $f_{V_1} \neq f_{V_2}$; a different function within the same contract is entered. The attacker exploits shared state between functions.
+    
+    \item \textbf{Cross-contract reentrancy}: $V_1 \neq V_2$; the re-entered function is in a different contract. This requires vulnerable state shared across contracts.
+\end{itemize}
+
+We extend this classification to capture behaviors observed in modern attacks:
+
+\begin{itemize}
+    \item \textbf{Cross-project reentrancy}: $V_1 \neq V_2$ and the contracts belong to different projects. This occurs when a vulnerability in one protocol affects users of a dependent protocol.
+    
+    \item \textbf{Cross-chain reentrancy}: The invocation chain spans multiple blockchain networks, typically through bridge protocols.
+\end{itemize}
+
+\subsection{Read-Only Reentrancy}
+
+A subtler variant, \textit{read-only reentrancy}, occurs when $f_{V_2}$ is a \lstinline{view} function that only reads state without modifying it. While such calls are benign in isolation, the stale data they return can influence subsequent logic in other contracts.
+
+For example, consider a price oracle that calculates token prices based on pool reserves. During a liquidity operation, reserves are temporarily modified. If an attacker triggers a callback and queries the oracle before reserves are finalized, the oracle returns an incorrect price that the attacker can exploit elsewhere.
+
+Read-only reentrancy is particularly insidious because \lstinline{view} functions are often considered safe for external calls. This pattern has affected major protocols including Curve and Balancer.
+
+% ============================================================================
+\section{Transaction Analysis Infrastructure}
+\label{sec:bg-infrastructure}
+
+Both the manual analysis methodology and automated tool developed in this thesis rely on the transaction analysis infrastructure provided by EVM nodes and blockchain explorers. This section describes the key components.
+
+\subsection{Call Traces}
+
+While standard transaction receipts provide only summaries of execution outcomes, advanced debugging endpoints can reconstruct the complete sequence of operations. The \lstinline{debug_traceTransaction} RPC method~\cite{geth-debug-namespace}, supported by most EVM node implementations, re-executes a transaction to generate a detailed \textit{call trace}.
+
+A call trace provides a hierarchical, depth-first representation of the transaction's call stack. Each trace entry corresponds to a single contract invocation and contains:
+\begin{itemize}
+    \item \textbf{type}: The EVM opcode used (\eg \texttt{CALL}, \texttt{DELEGATECALL}, \texttt{STATICCALL}, \texttt{CREATE})
+    \item \textbf{from}: The address of the calling contract
+    \item \textbf{to}: The address of the called contract
+    \item \textbf{input}: The calldata (function selector and arguments)
+    \item \textbf{output}: The return data from the call
+    \item \textbf{value}: The amount of native token transferred
+    \item \textbf{calls}: A nested array of subsequent trace entries
+\end{itemize}
+
+The hierarchical structure of call traces directly mirrors the call stack during execution, enabling reconstruction of the complete execution flow. For reentrancy analysis, call traces reveal the critical $V \rightarrow A \rightarrow V$ pattern described in Equation~\ref{eq:reentrancy-pattern}.
+
+\subsection{Deployment Provenance}
+
+Understanding contract relationships requires information about contract creation. When a smart contract is deployed, the deployment transaction creates the contract at a deterministic address. By querying blockchain explorers (\eg Etherscan~\cite{etherscan}) or examining creation traces, we can determine:
+\begin{itemize}
+    \item Which address initiated the deployment (the ``creator'')
+    \item Whether the contract was deployed by an Externally Owned Account (EOA) or another contract
+    \item The timestamp of deployment
+\end{itemize}
+
+This provenance information is crucial for identifying contract relationships and distinguishing attacker-controlled contracts from victim protocol components.
+
+\subsection{Source Code and Verification}
+
+Smart contract bytecode is permanently stored on-chain, but understanding contract logic typically requires access to source code. Many developers enhance transparency through \textit{source code verification}---publishing source code that, when compiled, produces the exact bytecode deployed on-chain. Verified source code is accessible through blockchain explorers.
+
+Source code access enables identification of specific vulnerabilities, understanding of business logic, and classification of attack patterns. However, not all contracts are verified; our analysis methodology can proceed with bytecode-only analysis when necessary, though with reduced detail.
+
+% ============================================================================
+\section{Historical Context: The DAO Attack}
+\label{sec:bg-dao}
+
+The DAO (Decentralized Autonomous Organization) was launched in April 2016 as an ambitious experiment in decentralized venture funding, attracting over \$150 million in contributions---approximately 14\% of all Ether in circulation at the time~\cite{the-dao-analysis}.
+
+On June 17, 2016, an attacker exploited a reentrancy vulnerability in the DAO's \lstinline{splitDAO} function to drain approximately 3.6 million Ether (worth roughly \$60 million). The attack followed the classic single-function reentrancy pattern: the function transferred Ether before updating the attacker's balance, enabling recursive withdrawals.
+
+The aftermath was unprecedented: the Ethereum community executed a controversial hard fork to reverse the attack and restore stolen funds, creating the Ethereum Classic chain that rejected the fork. This event:
+\begin{itemize}
+    \item Established reentrancy as the canonical smart contract vulnerability
+    \item Motivated extensive research into detection and prevention
+    \item Led to coding patterns and tools designed to prevent recurrence
+    \item Created an assumption that reentrancy was a ``solved'' problem
+\end{itemize}
+
+Nearly a decade later, this assumption has proven unfounded. Attacks have continued, evolved, and in many ways grown more sophisticated. The gap between the attention reentrancy receives in security education and its continued exploitation in practice motivates the empirical investigation at the core of this thesis.

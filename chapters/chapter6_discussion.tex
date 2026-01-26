@@ -1,0 +1,283 @@
+\chapter{Discussion and Conclusion}
+\label{ch:discussion}
+
+This chapter synthesizes findings from our empirical investigation and automated analysis, discusses their broader implications, evaluates existing defenses, provides guidance for stakeholders, acknowledges limitations, and outlines directions for future research. We conclude with final remarks summarizing the thesis contributions.
+
+% ============================================================================
+\section{Synthesis of Findings}
+\label{sec:disc-synthesis}
+
+Our research reveals several key insights that emerge from integrating manual empirical analysis with automated large-scale investigation.
+
+\subsection{The Evolved Threat Landscape}
+
+Reentrancy attacks have evolved significantly beyond the patterns that dominated early research:
+\begin{itemize}
+    \item \textbf{Scope expansion}: Cross-function attacks now comprise 42.3\% of incidents, surpassing the single-function pattern traditionally emphasized in security education
+    \item \textbf{Entry point diversification}: Attackers exploit malicious tokens, ERC hooks, and application callbacks in addition to traditional fallback functions
+    \item \textbf{Strategy sophistication}: Price manipulation has become the dominant strategy, leveraging flash loans and complex multi-contract interactions
+    \item \textbf{Timeline compression}: Attackers deploy malicious contracts within exploit transactions, evading preemptive detection
+\end{itemize}
+
+These findings challenge assumptions underlying many detection tools developed before 2020, when few real-world attacks had occurred.
+
+\subsection{The Dual Nature of Reentrancy}
+
+A critical insight from our research is reentrancy's dual nature: it functions both as an exploit vector and as a legitimate design pattern. Our analysis of \ToolName's flagged transactions revealed that benign reentrancy patterns have existed since at least May 2020 (Uniswap V2's launch), predating the surge of malicious attacks in mid-2021.
+
+This duality has significant implications:
+\begin{itemize}
+    \item \textbf{Detection complexity}: Tools cannot simply flag all reentrancy as malicious
+    \item \textbf{Intent determination}: Distinguishing malicious from benign reentrancy requires understanding of context and intent, which is challenging to automate
+    \item \textbf{Defense design}: Blanket prohibitions on reentrancy would break legitimate protocol functionality
+\end{itemize}
+
+\subsection{Bridging Manual and Automated Analysis}
+
+Our unified methodology demonstrates how manual expertise and automated capabilities can reinforce each other:
+\begin{itemize}
+    \item Manual analysis provides the ground truth and deep understanding necessary to develop reliable algorithms
+    \item Automated analysis enables scale, consistency, and speed that manual investigation cannot achieve
+    \item Combining both perspectives yields insights neither could produce alone
+\end{itemize}
+
+The discovery that \ToolName\ could identify a classification error in our manual work (DeltaPrime) suggests that automation may ultimately exceed human accuracy for well-defined classification tasks.
+
+% ============================================================================
+\section{Challenging Established Assumptions}
+\label{sec:disc-myths}
+
+Our analyses reveal persistent misconceptions about reentrancy attacks in both academic and industrial contexts. Table~\ref{tab:2} summarizes these myths and corresponding realities.
+
+\input{assets/tables/misconception-table}
+
+These misconceptions stem not from negligence but from historical circumstances. Most widely-cited static analysis tools were developed before 2020, when only a few real-world attacks had occurred. These tools could not have anticipated the sophisticated strategies modern attackers would adopt.
+
+In research, outdated assumptions lead to limited detection efficacy in real-world scenarios. In practice, they may result in design flaws that expose contracts to exploitation. Our empirical findings provide the evidence necessary to update these assumptions.
+
+% ============================================================================
+\section{Evaluating Existing Defenses}
+\label{sec:disc-defenses}
+
+The two most commonly adopted techniques for mitigating reentrancy attacks are the Checks-Effects-Interactions (CEI) pattern and reentrancy guards. Our analysis reveals limitations in both approaches.
+
+\subsection{Reentrancy Guards}
+
+Reentrancy guards apply a modifier that reverts transactions when protected functions are recursively invoked. This technique is effective for single-function reentrancy but less so for cross-contract or higher-scope cases. Protection scope depends on implementation: guards deployed in shared base contracts offer broader coverage than those embedded within individual Solidity contracts.
+
+Our quantitative analysis shows that while 65.8\% of incidents could have been prevented by reentrancy guards, this rate drops from 81.6\% before 2023 to 51.4\% after 2023. The declining effectiveness reflects the evolution toward cross-contract attacks. Notably, cross-contract and higher-scope attacks account for 57.2\% of total fund losses despite representing only 21.1\% of incident counts---indicating that bypassing guards enables larger-scale exploitation.
+
+\subsection{Checks-Effects-Interactions Pattern}
+
+The CEI pattern advises developers to update state variables (effects) before making external calls (interactions), ensuring consistent state when execution transfers to other contracts. This approach is conceptually sound and remains the most common remediation strategy post-attack.
+
+However, practical constraints limit CEI applicability:
+\begin{itemize}
+    \item Some business logic inherently requires state differences before and after interactions
+    \item Flash loan implementations, by design, must transfer control before processing repayment
+    \item Protocol composability often necessitates callbacks during operations
+\end{itemize}
+
+These constraints explain why CEI alone cannot eliminate reentrancy vulnerabilities in complex DeFi systems.
+
+\subsection{Root Cause Analysis}
+
+Analyzing vulnerabilities from the victim's perspective, we find that exploitable reentrancy vulnerabilities typically stem from a combination of two necessary factors:
+\begin{enumerate}
+    \item Flawed logic that updates states \textit{after} external calls, violating the CEI pattern
+    \item Failure to account for malicious execution during seemingly benign transfer actions, or underestimation of malicious intent in explicit external calls
+\end{enumerate}
+Both conditions are equally necessary for successful exploitation. Although best practices advocate addressing both, developers often prioritize the second, as the increasing demand for flexibility often conflicts with the strict constraints of the CEI pattern.
+
+\subsection{Defense Implications}
+
+Our findings suggest that:
+\begin{enumerate}
+    \item Neither reentrancy guards nor CEI pattern alone provides comprehensive protection
+    \item Defense-in-depth strategies combining multiple approaches are necessary
+    \item Context-aware defenses that understand legitimate reentrancy patterns offer a promising direction
+    \item Automated analysis tools like \ToolName\ can support rapid post-mortem investigation when preventive measures fail
+\end{enumerate}
+
+% ============================================================================
+\section{Implications for Stakeholders}
+\label{sec:disc-implications}
+
+Our findings have practical implications for multiple stakeholder groups.
+
+\subsection{Smart Contract Developers}
+
+Developers should:
+\begin{enumerate}
+    \item \textbf{Update threat models}: Assume attackers will use diverse entry points beyond \lstinline{fallback}, including malicious tokens and custom callbacks
+    \item \textbf{Apply comprehensive guards}: Implement reentrancy guards at the project level (shared across contracts) rather than individual functions
+    \item \textbf{Scrutinize state dependencies}: Recognize that any variable influencing financial logic---not just balances---requires protection
+    \item \textbf{Audit external dependencies}: Vulnerabilities may propagate through forked code or external oracles
+    \item \textbf{Consider legitimate reentrancy}: Design protocols to accommodate benign reentrant flows where necessary, with appropriate safeguards
+\end{enumerate}
+
+\subsection{Security Auditors}
+
+Auditors should:
+\begin{enumerate}
+    \item \textbf{Prioritize cross-function analysis}: Given that cross-function attacks now dominate, inter-function state consistency requires particular attention
+    \item \textbf{Examine callback implementations}: Custom hooks and flash loan functions are high-risk surfaces
+    \item \textbf{Trace deployment provenance}: Factory patterns and contract relationships can reveal vulnerability inheritance
+    \item \textbf{Integrate automated tools}: \ToolName\ and similar tools can accelerate incident response and support systematic analysis
+\end{enumerate}
+
+\subsection{Researchers}
+
+Future research should:
+\begin{enumerate}
+    \item \textbf{Move beyond 2016-era assumptions}: Early patterns no longer represent the dominant threat
+    \item \textbf{Address multi-vulnerability interactions}: Reentrancy frequently combines with access control flaws, oracle manipulation, and other vulnerabilities
+    \item \textbf{Tackle intent detection}: Distinguishing malicious from benign reentrancy remains an open challenge
+    \item \textbf{Develop standardized interfaces}: Ecosystem fragmentation hinders analysis tool development
+\end{enumerate}
+
+% ============================================================================
+\section{Limitations}
+\label{sec:disc-limitations}
+
+We acknowledge several limitations in our research.
+
+\subsection{Dataset Limitations}
+
+Our reentrancy attack data was sourced from publicly available repositories~\cite{reentrancy-list-pcaversaccio, blocksec-security-incidents, slowmist-hacked}, which may favor high-profile cases. Smaller-loss attacks might receive less attention and thus be underrepresented. We mitigate this by compiling data from multiple sources, but some bias likely remains.
+
+This challenge is not unique to our study: prior work~\cite{turn-the-rudder} similarly excludes attacks with losses below \$100,000. Our comprehensive approach aims to minimize but cannot eliminate this limitation.
+
+\subsection{Manual Analysis Limitations}
+
+Both researchers analyzed attack transactions using similar tools (BlockSec Phalcon Explorer, Tenderly Explorer) and reference materials (incident reports, post-mortems, social media disclosures). Reliance on similar resources could introduce systematic bias.
+
+We addressed this through cross-validation: independent analysis followed by reconciliation of discrepancies. However, this process was informal rather than systematic---we did not track initial agreement rates or compute inter-rater reliability metrics. The discovery that \ToolName\ could identify an error in our manual work suggests some residual error may exist in other classifications.
+
+\subsection{Tool Limitations}
+
+\ToolName's primary limitation stems from its reliance on the authorial provenance heuristic. While effective against known attacks, determined attackers can circumvent it by using distinct, unrelated addresses for contract deployment and exploit initiation, as observed in the GoodDollar and Penpie cases.
+
+Establishing authorship links from on-chain data alone is an intractable problem when attackers deliberately obscure provenance. This remains an evasion vector that \ToolName\ cannot address without off-chain information.
+
+Additionally, \ToolName\ cannot distinguish malicious from benign reentrancy. While it correctly identifies reentrant patterns, intent determination requires semantic understanding beyond current capabilities.
+
+\subsection{Ecosystem Fragmentation}
+
+A significant engineering challenge was the fragmentation of tracing support across the EVM ecosystem. ``EVM-compatibility'' does not guarantee uniform API support for debugging endpoints. Data format inconsistencies, layer 2 upgrade disruptions, and commercial provider limitations reduced coverage for some chains (Fuse, Fantom).
+
+This fragmentation highlights the need for standardized debugging interfaces in the growing blockchain ecosystem.
+
+% ============================================================================
+\section{Broader Discussion}
+\label{sec:disc-broader}
+
+\subsection{Reentrancy on Non-EVM Blockchains}
+\label{sec:disc-non-evm}
+
+While this thesis focuses on EVM-compatible blockchains, reentrancy's relationship to blockchain architecture warrants broader discussion. Reentrancy is fundamentally tied to the account model adopted by Ethereum and its derivatives, where smart contracts maintain mutable state and can make external calls that transfer execution control while state remains inconsistent.
+
+In contrast, blockchains employing the UTXO (Unspent Transaction Output) model---such as Bitcoin---are inherently resistant to reentrancy. Each UTXO can only be spent once; there is no mutable global state that an external call could exploit mid-transaction. The Nervos Network's CKB similarly resists reentrancy through its UTXO-based Cell model: inter-script interaction via \lstinline{exec} replaces the current script without returning, while \lstinline{spawn} is used primarily for modularity rather than dynamic callbacks~\cite{nervos-ckb}.
+
+Some platforms introduce hybrid approaches. Solana prohibits recursion into the same program at the design level~\cite{solana-security}, reducing reentrancy risk at the cost of programming flexibility. EOS, which supports smart contracts in C++, remains vulnerable despite lacking a \lstinline{fallback} function; its message-passing model introduces similar vulnerabilities. On May 14, 2021, a reentrancy exploit on EOS led to a \$13 million loss~\cite{attack-report:sx}.
+
+\subsection{Applicability to Other Vulnerability Types}
+\label{sec:disc-other-vulns}
+
+Our analysis relies primarily on call traces of exploit transactions, which capture cross-contract operations such as \lstinline{CALL}, \lstinline{DELEGATECALL}, \lstinline{STATICCALL}, and \lstinline{CREATE}. Since reentrancy is inherently a cross-contract phenomenon, call traces are sufficient for detection and vulnerability localization.
+
+However, this approach does not generalize to many other vulnerability classes. Issues like integer overflow/underflow, timestamp dependency, and insufficient input validation occur within single-contract internal logic---below call trace granularity. Furthermore, vulnerabilities such as access control flaws or general logic bugs are more abstract and context-dependent, requiring deep semantic understanding and source code access for detection. Attacks unrelated to contract logic, such as phishing, fall entirely outside our methodology.
+
+% ============================================================================
+\section{Threats to Validity}
+\label{sec:disc-threats}
+
+\textbf{External Threats.} The primary external threat is dataset representativeness. Our incident sources may underrepresent smaller attacks, geographically concentrated attacks, or incidents on less-monitored chains. The correlation between incident reporting and attack severity could bias our quantitative findings.
+
+We mitigate this by using multiple independent sources and acknowledging that our statistics describe \textit{documented} attacks rather than all attacks that occurred.
+
+\textbf{Internal Threats.} The primary internal threat is analysis consistency. Despite cross-validation, subjective elements in classification (\eg distinguishing cross-function from cross-contract when proxy patterns are involved) could introduce variability.
+
+\ToolName's reproducible algorithmic approach mitigates this for automated analysis, but ground-truth labels necessarily depend on human judgment. The identification of the DeltaPrime classification error suggests our validation process was generally effective.
+
+% ============================================================================
+\section{Future Directions}
+\label{sec:disc-future}
+
+Our research opens several directions for future investigation.
+
+\subsection{Enhancing \ToolName}
+
+Two directions could enhance \ToolName's capabilities:
+
+\begin{enumerate}
+    \item \textbf{State-Level Analysis}: Incorporating state-level tracers (available via \lstinline{debug_traceTransaction}) could detect malicious patterns such as accessing stale state variables before updates. This would provide stronger evidence of exploitation beyond the reentrant pattern alone.
+    
+    \item \textbf{Token Flow Heuristics}: Integrating balance tracking could help filter benign reentrancy---cases where the transaction sender incurs zero or negative net value change are unlikely to be malicious.
+\end{enumerate}
+
+These features require architectural extensions but present potential to advance toward fully automated threat detection.
+
+\subsection{Real-Time Integration}
+
+\ToolName's sub-100ms latency suggests feasibility for real-time deployment. Future work could:
+\begin{itemize}
+    \item Integrate with mempool monitoring for preemptive attack detection
+    \item Provide real-time alerts to protocol operators
+    \item Enable automated circuit breakers that pause vulnerable functions upon detection
+\end{itemize}
+
+Such integration would transition \ToolName\ from post-mortem analysis to active defense.
+
+\subsection{Multi-Vulnerability Analysis}
+
+Our findings show reentrancy frequently combines with other vulnerabilities---access control flaws, oracle manipulation, and configuration weaknesses. Future frameworks could:
+\begin{itemize}
+    \item Model vulnerability interactions systematically
+    \item Develop detection approaches for compound exploits
+    \item Analyze attack surfaces holistically rather than vulnerability-by-vulnerability
+\end{itemize}
+
+\subsection{Standardization Efforts}
+
+The ecosystem fragmentation we encountered impedes reproducible research. Community efforts toward standardized debugging interfaces, common trace formats, and accessible archive node infrastructure would benefit the entire security research community.
+
+% ============================================================================
+\section{Conclusion}
+\label{sec:disc-conclusion}
+
+\subsection{Research Journey Summary}
+
+This thesis presents a comprehensive investigation of reentrancy attacks on EVM-compatible blockchains, progressing from empirical understanding to automated analysis. We began by recognizing two interconnected gaps: the outdated understanding of real-world attacks and the absence of automated post-mortem analysis tools.
+
+To address the first gap, we analyzed \integer{ReentrancyCount} confirmed reentrancy incidents from 2016 to 2024 across multiple blockchains---significantly more than prior empirical studies in this area. Through integrated qualitative and quantitative methodologies, we developed a multi-dimensional understanding of how these attacks manifest and evolve.
+
+To address the second gap, we developed \ToolName---the first automated tool for reentrancy exploit analysis. Crucially, \ToolName's design derives directly from our empirical methodology: the challenges encountered during manual analysis became the problems our algorithms solve.
+
+Manual analysis informed tool design; the tool enabled validation at scale. This bidirectional relationship yielded insights neither approach could achieve alone.
+
+\subsection{Key Contributions}
+
+This thesis contributes:
+
+\begin{enumerate}
+    \item \textbf{Comprehensive Empirical Analysis}: The first large-scale, multi-dimensional study of real-world reentrancy attacks, analyzing \integer{ReentrancyCount} incidents across seven dimensions
+    
+    \item \textbf{Attack Taxonomy}: Identification of seven distinct attack strategies and formal classification of scope and entry point characteristics
+    
+    \item \textbf{\ToolName\ Tool}: The first automated tool for post-mortem reentrancy analysis, achieving \FirstRecall\ detection recall and \FirstCategorizationRecall\ characterization accuracy
+    
+    \item \textbf{Novel Algorithms}: The authorial provenance resolution algorithm for contract role identification and the stateful trace traversal algorithm for pattern detection
+    
+    \item \textbf{Curated Datasets}: Ground-truth exploit datasets and random transaction datasets enabling reproducible research
+    
+    \item \textbf{Integrated Insights}: Synthesis revealing reentrancy's dual nature, the prevalence of legitimate reentrancy patterns, and the evolution of attack sophistication
+\end{enumerate}
+
+\subsection{Closing Remarks}
+
+Nearly a decade after the DAO attack, reentrancy vulnerabilities remain a persistent threat to blockchain security. Our research reveals that this persistence stems not from lack of attention but from the gap between research assumptions and evolving attack realities.
+
+The threat landscape has transformed: attacks are more sophisticated, entry points more diverse, and strategies more complex than commonly understood. Yet our findings also offer hope: the declining average losses since mid-2022, the effectiveness of comprehensive reentrancy guards when properly applied, and the viability of automated analysis all suggest progress is possible.
+
+By providing both the empirical understanding and practical tooling necessary to address reentrancy threats, this thesis contributes toward a more secure blockchain ecosystem. The methodological approach---where empirical observation drives tool development, and tools enable further empirical investigation---offers a template for tackling other persistent security challenges in this rapidly evolving domain.

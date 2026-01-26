@@ -3,5 +3,5 @@
 
 build
 
-*.pdf
+*.log
 *.code-workspace
