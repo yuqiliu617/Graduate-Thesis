@@ -1,0 +1,23 @@
+\bgroup
+\def\arraystretch{1.5}
+\begin{table}[htbp]
+    \centering
+    \caption{Accuracy of \ToolName\ on the Ground-Truth Exploit Dataset}
+    \label{tb:accuracy-results}
+    \begin{small}
+        \resizebox{\textwidth}{!}{%
+            \newcommand{\tableheader}[1]{\textbf{\changefont[8pt]{#1}}}
+            \begin{tabular}{|p{1.8cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|}
+                \hline
+                \tableheader{Collection} & \tableheader{Total} & \tableheader{Evaluable} & \tableheader{Detected} & \tableheader{Correctly Analyzed} & \tableheader{Wrong Scope} & \tableheader{Wrong Entry Point} & \tableheader{Detection Recall} & \tableheader{Analysis \mbox{Recall}} \\
+                \hline
+                First Exploit            & \arabic{FirstTotal} & \arabic{FirstEvaluable} & \arabic{FirstDetected} & \arabic{FirstCategorized}        & 1                         & 0                               & \FirstRecall{}                 & \FirstCategorizationRecall{}         \\
+                \hline
+                All Exploits             & \arabic{AllTotal}   & \arabic{AllEvaluable}   & \arabic{AllDetected}   & \arabic{AllCategorized}          & 1                         & 0                               & \AllRecall{}                   & \AllCategorizationRecall{}           \\
+                \hline
+            \end{tabular}
+        }%
+    \end{small}
+    \vspace{-3mm}
+\end{table}
+\egroup

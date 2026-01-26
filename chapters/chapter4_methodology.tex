@@ -1,0 +1,320 @@
+\chapter{Methodology}
+\label{ch:methodology}
+
+This chapter presents our unified research methodology, demonstrating how manual empirical analysis naturally evolves into automated algorithms. We begin with an overview of our two-phase research design, then describe the data foundation. The subsequent sections detail the manual analysis methodology for the empirical study and show how each manual step becomes an automated component in \ToolName. This presentation emphasizes the direct connection between empirical observation and tool design---the manual challenges we encountered directly motivated the automated solutions we developed.
+
+% ============================================================================
+\section{Research Design Overview}
+\label{sec:meth-overview}
+
+Our research follows a two-phase design where each phase informs and strengthens the other:
+
+\begin{enumerate}
+    \item \textbf{Phase 1: Empirical Investigation}---Systematic manual analysis of real-world reentrancy attacks to understand the threat landscape, develop attack taxonomies, and identify analysis challenges.
+    
+    \item \textbf{Phase 2: Tool Development}---Translation of manual analysis processes into automated algorithms, resulting in \ToolName, a tool for automated reentrancy exploit analysis.
+\end{enumerate}
+
+The relationship between phases is bidirectional. The challenges encountered during manual analysis directly motivated specific algorithmic solutions: the difficulty of distinguishing attacker from victim contracts led to our address grouping algorithm; the complexity of tracing reentrancy patterns through deep call stacks led to our stateful traversal algorithm; the need for consistent classification led to our formal trace annotation scheme.
+
+In turn, \ToolName\ enables validation and extension of our empirical findings. The tool's performance on ground-truth data validates the empirical classifications, while large-scale analysis reveals patterns that would be infeasible to observe manually.
+
+This chapter presents both phases as a unified methodology, emphasizing how each manual process has a corresponding automated solution.
+
+% ============================================================================
+\section{Data Foundation}
+\label{sec:meth-data}
+
+Both phases of our research rely on a common data foundation comprising attack incident records, transaction-level data, and supporting datasets.
+
+\subsection{Attack Incident Collection}
+\label{sec:meth-collection}
+
+We compile reentrancy incidents from three primary sources:
+\begin{enumerate}
+    \item A curated GitHub repository maintained by a white-hat security researcher~\cite{reentrancy-list-pcaversaccio}
+    \item BlockSec's incident records~\cite{blocksec-security-incidents}
+    \item SlowMist's hack events archive~\cite{slowmist-hacked}
+\end{enumerate}
+
+While these sources are neither exhaustive nor independently verified, they represent the most comprehensive public datasets available. The combined sources document reentrancy incidents from 2016 through 2024 across multiple EVM-compatible blockchains.
+
+We apply the following quality assurance process:
+\begin{itemize}
+    \item \textbf{Reentrancy verification}: We exclude incidents that, upon analysis, do not actually involve reentrancy patterns
+    \item \textbf{Blockchain support}: We exclude incidents on blockchains unsupported by our analysis tooling
+    \item \textbf{Data availability}: We exclude incidents lacking sufficient transaction data for analysis
+\end{itemize}
+
+After exclusions, our dataset comprises \integer{ReentrancyCount} confirmed reentrancy incidents. To support reproducibility and future research, this curated dataset has been made publicly available~\cite{our-dataset}.
+
+\subsection{Transaction-Level Data}
+
+For each incident, we collect transaction-level data essential for analysis:
+
+\begin{itemize}
+    \item \textbf{Call traces}: Complete execution traces retrieved via \lstinline{debug_traceTransaction} endpoints from commercial node providers (QuickNode, Tenderly)
+    
+    \item \textbf{Deployment provenance}: Contract creation metadata obtained from blockchain explorers (Etherscan and chain-specific equivalents), linking each contract to its deployment transaction and creator
+    
+    \item \textbf{Transaction metadata}: Timestamps, block numbers, gas usage, and involved addresses
+    
+    \item \textbf{Source code}: Verified source code when available, accessed through blockchain explorer APIs
+\end{itemize}
+
+\subsection{Dataset Augmentation}
+
+The original incident sources typically provide only the first exploit transaction for each attack. However, many attacks involve multiple exploit transactions---repeated invocations of the same vulnerability before patching. For comprehensive evaluation of \ToolName, we augmented the dataset through manual inspection to incorporate all exploit transactions per incident.
+
+This augmentation expanded our ground-truth dataset from \integer{ReentrancyCount} incidents (first transactions only) to \integer{AllTotal} total exploit transactions. To our knowledge, this represents the most comprehensive publicly available dataset of real-world reentrancy exploit transactions on EVM-compatible blockchains.
+
+Additionally, for false positive evaluation, we compiled a random transaction dataset of \integer{FpDatasetSize} transactions sampled from \integer{FpChainCount} EVM-compatible chains between 2021 and 2024. Sampling proceeded by randomly selecting block numbers within the target time range for each chain, then including all transactions from selected blocks. This block-based approach trades slight bias for efficiency in data collection.
+
+% ============================================================================
+\section{Manual Analysis Methodology}
+\label{sec:meth-manual}
+
+We first describe the systematic manual analysis conducted by two researchers (both co-authors of the associated publications). We emphasize aspects that later inform automation.
+
+\subsection{Transaction Inspection Process}
+
+For each incident, we analyze the exploit transaction's call trace using BlockSec Phalcon Explorer~\cite{blocksec-security-incidents} and Tenderly Explorer~\cite{tenderly}. These tools provide visual representations of call traces and token flows that facilitate manual navigation.
+
+The inspection process proceeds as follows:
+\begin{enumerate}
+    \item \textbf{Trace navigation}: Explore the call trace to understand the transaction's execution flow
+    \item \textbf{Pattern identification}: Locate the reentrancy pattern---where execution returns to a victim contract from an attacker-controlled callback
+    \item \textbf{Vulnerability localization}: Identify the specific code that enables the reentrancy, typically a state update occurring after an external call
+    \item \textbf{Token flow analysis}: Trace asset movements to understand the attack's financial impact
+\end{enumerate}
+
+While public incident reports from security firms are consulted, they often lack sufficient detail or contain inconsistencies. The insights in this study derive primarily from our own analyses.
+
+\subsection{Identifying Participant Roles}
+\label{sec:meth-roles}
+
+A critical step in analyzing reentrancy is distinguishing attacker-controlled contracts from victim protocol components. This distinction is straightforward for single-function reentrancy ($V_1 = V_2$) but essential for cross-contract attacks.
+
+\textbf{Manual Approach.} During manual analysis, we examine:
+\begin{itemize}
+    \item \textbf{Deployment patterns}: When was each contract deployed? Contracts deployed immediately before or during the exploit are likely attacker-controlled.
+    \item \textbf{Creator relationships}: What address deployed each contract? Contracts sharing a common creator likely share authorship.
+    \item \textbf{Behavioral patterns}: Does the contract initiate the exploit or receive callbacks? Initiating contracts are typically attacker-controlled.
+    \item \textbf{Protocol membership}: Is the contract a known component of the victim protocol?
+\end{itemize}
+
+\textbf{Challenge Observed.} Determining contract roles is time-intensive and requires expertise. Factory contracts complicate analysis: a contract created by Uniswap's factory is clearly not attacker-controlled, but a contract created by a generic deployment utility might be. We must trace through potentially complex deployment chains to reach the ultimate human author.
+
+This challenge directly motivates the address grouping algorithm described in Section~\ref{sec:meth-grouping}.
+
+\subsection{Detecting Reentrancy Patterns}
+\label{sec:meth-patterns}
+
+Once participant roles are established, we identify the reentrancy pattern in the call trace.
+
+\textbf{Manual Approach.} We navigate the call trace looking for the signature pattern:
+\begin{enumerate}
+    \item A call from a victim contract to an attacker-controlled address
+    \item A callback from the attacker's contract back to a victim contract
+    \item Execution in the victim occurring before the original call completes
+\end{enumerate}
+
+This requires tracking the current execution context while traversing potentially thousands of nested calls.
+
+\textbf{Challenge Observed.} Complex transactions may contain dozens of cross-contract calls, many unrelated to the attack. We must maintain mental state about which contracts have been visited and from what context. Deep recursion strains human attention, leading to potential errors.
+
+This challenge directly motivates the stateful trace traversal algorithm described in Section~\ref{sec:meth-detection}.
+
+\subsection{Characterizing Exploits}
+\label{sec:meth-characterizing}
+
+After locating the reentrancy pattern, we characterize the exploit along multiple dimensions.
+
+\textbf{Manual Approach.} We classify:
+\begin{itemize}
+    \item \textbf{Scope}: Is the attack single-function, cross-function, or cross-contract?
+    \item \textbf{Entry point}: What function in the attacker's contract receives the callback (fallback, ERC hook, application hook, or malicious token)?
+    \item \textbf{Strategy}: How does the attacker profit (price manipulation, reentrant withdrawal, etc.)?
+    \item \textbf{Vulnerability origin}: Does the vulnerability reside in the victim's code or an external dependency?
+\end{itemize}
+
+\textbf{Challenge Observed.} Without formal classification rules, different analysts might characterize the same attack differently. The implicit rules we use for classification need to be made explicit for consistency.
+
+This challenge motivates the formal characterization methodology described in Section~\ref{sec:meth-characterization}.
+
+\subsection{Categorization and Taxonomy Development}
+
+Following transaction analysis, we employ an open coding approach to develop attack taxonomies. We first define initial codes reflecting specific exploit structures observed, then iteratively generalize by merging codes with shared underlying mechanisms.
+
+For example, attacks manipulating price oracle outputs and attacks manipulating AMM pool formulas both exploit stale price information during reentrancy. We group these under the broader category of ``price manipulation.'' Where possible, we align terminology with established usage; where no suitable term exists, we introduce new terminology.
+
+\subsection{Cross-Validation}
+\label{sec:meth-crossval}
+
+To reduce bias, we each independently analyzed every incident, then cross-reviewed findings and discussed discrepancies until reaching consensus. This collaborative process caught individual errors, ensured classification consistency, and refined taxonomy definitions through discussion.
+
+% ============================================================================
+\section{From Manual to Automated: The \ToolName\ Approach}
+\label{sec:meth-automated}
+
+ReSect automates the manual workflow, addressing specific challenges we encountered. This section presents each automated solution alongside the manual process it replaces.
+
+\subsection{Design Principles}
+
+\ToolName\ is designed to automate the expert analysis workflow while addressing the limitations of manual investigation:
+
+\begin{enumerate}
+    \item \textbf{Formalization}: Convert implicit classification rules into explicit, algorithmic definitions
+    \item \textbf{Consistency}: Eliminate analyst-dependent variation through deterministic processing  
+    \item \textbf{Scalability}: Enable analysis of transactions in milliseconds rather than hours
+    \item \textbf{Accuracy}: Match or exceed expert-level classification through systematic methodology
+\end{enumerate}
+
+Importantly, \ToolName\ employs deterministic algorithms rather than machine learning models. Classification outcomes are fully determined by explicit rules, with no training or parameter tuning involved. When discrepancies arose between \ToolName's output and our ground-truth labels during development, we investigated each case individually: if the label was incorrect, we corrected it; if the algorithm was faulty, we fixed the bug. This process ensured both the tool and the dataset converged toward accuracy.
+
+\subsection{Automating Role Identification: Address Grouping}
+\label{sec:meth-grouping}
+
+\textbf{The Manual Process:} As described in Section~\ref{sec:meth-roles}, we manually examined deployment transactions and traced contract origins to determine which contracts belonged to the attacker versus the victim protocol.
+
+\textbf{The Automated Solution:} We introduce an \textit{authorial provenance heuristic} that programmatically determines contract authorship based on deployment relationships.
+
+The core principle is that contracts deployed by the same originating entity belong to the same logical group. We define a contract's ``author'' as the Externally Owned Account (EOA) that ultimately provided its bytecode.
+
+Resolving authorship is complicated by \textbf{factory contracts}---smart contracts that deploy other contracts. Factory usage creates two cases:
+
+\begin{itemize}
+    \item \textbf{Protocol-Internal Factories}: A protocol uses a factory to deploy standardized instances (\eg Uniswap deploying liquidity pools). Here, the factory is an integral protocol component, and the transaction sender is merely a user. The deployed contract's author should be the factory's author.
+    
+    \item \textbf{Public Utility Factories}: A developer uses a generic third-party factory for deployment convenience (\eg CreateX~\cite{createx}). Here, the factory is just a tool, and the EOA supplying the bytecode is the true author.
+\end{itemize}
+
+These patterns can be nested---a utility factory might deploy a factory that deploys the attack contract---requiring traversal through complex deployment chains.
+
+\textbf{Algorithm.} Algorithm~\ref{algo:author-resolution} presents our Authorial Provenance Resolution algorithm. For each contract, it traverses the creation call stack upward. The key heuristic (line 7) determines whether to continue traversal: if the parent call's input contains the current contract's init code, the parent is a utility factory (continue traversal); otherwise, it is a protocol factory (stop traversal).
+
+When traversal terminates at an EOA, that EOA is the author. When it terminates at a contract (protocol factory), we record a dependency. After processing all contracts, we resolve dependencies using a disjoint-set structure with path compression, ensuring all contracts are assigned an EOA author.
+
+\input{assets/code/author-resolution-algo}
+
+\subsection{Automating Pattern Detection: Stateful Trace Traversal}
+\label{sec:meth-detection}
+
+\textbf{The Manual Process:} As described in Section~\ref{sec:meth-patterns}, we navigated call traces to find where execution passed to attacker control and subsequently re-entered victim contracts.
+
+\textbf{The Automated Solution:} We implement a \textit{stateful trace traversal} algorithm that systematically identifies the reentrancy pattern from Equation~\ref{eq:reentrancy-pattern}.
+
+The algorithm performs a depth-first traversal of the call trace while maintaining state about control flow transitions. Key state elements include:
+
+\begin{itemize}
+    \item \textbf{senderDepth}: Tracks the call depth at which control first passed from victim-group to attacker-group contracts. Initially $-1$ (victim-controlled phase); when set to a non-negative value, indicates the attacker-controlled phase.
+    
+    \item \textbf{Visit counters}: Two sets of counters track contract visits:
+    \begin{itemize}
+        \item \textit{Pre-attacker counter}: Records victim-group contracts visited before control handover
+        \item \textit{Post-attacker counter}: Records victim-group contracts visited during attacker-controlled phase
+    \end{itemize}
+\end{itemize}
+
+Detection triggers when, during the attacker-controlled phase, the traversal encounters a victim-group contract present in the pre-attacker counter. This identifies the re-entrant call ($A \rightarrow V_2$) where $V_2$ was visited before the attacker gained control.
+
+The two-counter mechanism handles complex exploits with nested control transfers. If a new $V \rightarrow A$ transition occurs at greater depth, we update \texttt{senderDepth}, merge post-attacker counts into pre-attacker counts, and reset. This ensures ``previously visited'' is always relative to the most recent control handover.
+
+\input{assets/code/detect-reentrancy-algo}
+
+Algorithm~\ref{algo:detect-reentrancy} presents the detection algorithm. Upon detection, it returns the current call stack, precisely identifying the moment and location of the reentrancy.
+
+\subsection{Automating Characterization: Trace Annotation}
+\label{sec:meth-characterization}
+
+\textbf{The Manual Process:} As described in Section~\ref{sec:meth-characterizing}, we classified each attack's scope and entry point based on implicit rules developed through experience.
+
+\textbf{The Automated Solution:} We formalize characterization through a \textit{trace annotation scheme} that explicitly marks key traces in the detected reentrancy call stack.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.6\textwidth]{trace-annotations}
+    \caption{Trace annotations in a reentrancy call stack}
+    \label{fig:trace-annotations}
+\end{figure}
+
+Four annotations are applied (illustrated in Figure~\ref{fig:trace-annotations}):
+\begin{itemize}
+    \item \textbf{VictimOut}: A call from a victim-group contract to an attacker-group contract ($V_1 \rightarrow A$)
+    \item \textbf{AttackerIn}: The corresponding trace where the attacker-group receives control
+    \item \textbf{AttackerOut}: A call from an attacker-group contract to a victim-group contract ($A \rightarrow V_2$)
+    \item \textbf{VictimIn}: The corresponding trace where the victim-group is re-entered
+\end{itemize}
+
+A single trace can hold multiple annotations (\eg both VictimOut and AttackerIn).
+
+\textbf{Entry Point Classification.} The entry point is determined by analyzing the function selector of the first AttackerIn trace:
+\begin{itemize}
+    \item \textbf{Fallback}: Selector is null or empty
+    \item \textbf{Malicious Token}: Selector matches ERC-20 functions (\lstinline{transfer}, \lstinline{approve}, etc.)
+    \item \textbf{ERC Hook}: Selector matches hooks from ERC-721, ERC-777, or ERC-1155
+    \item \textbf{Application Hook}: Selector matches none of the above (custom callback)
+\end{itemize}
+
+\textbf{Scope Classification.} Scope is determined by comparing the VictimOut source with the VictimIn destination:
+\begin{itemize}
+    \item \textbf{Single-Function}: Same contract and same function selector
+    \item \textbf{Cross-Function}: Same contract, different selectors
+    \item \textbf{Cross-Contract}: Different contracts
+\end{itemize}
+
+% ============================================================================
+\section{Implementation}
+\label{sec:meth-implementation}
+
+\ToolName\ is implemented in TypeScript 5.9.2, running on Node.js 22.13.1. This section describes key implementation details.
+
+\subsection{Architecture}
+
+\ToolName\ follows a modular pipeline architecture:
+\begin{enumerate}
+    \item \textbf{Data Collection}: Retrieves call traces and deployment metadata from external sources
+    \item \textbf{Address Grouping}: Executes Algorithm~\ref{algo:author-resolution} to determine contract authors
+    \item \textbf{Reentrancy Detection}: Executes Algorithm~\ref{algo:detect-reentrancy} to identify patterns
+    \item \textbf{Characterization}: Annotates traces and classifies scope/entry point
+    \item \textbf{Output}: Generates structured analysis reports
+\end{enumerate}
+
+\subsection{Caching Layer}
+
+Network latency from querying external sources (node providers, blockchain explorers) represents a primary performance bottleneck. \ToolName\ incorporates a PostgreSQL caching layer: all retrieved data is stored locally upon first retrieval. Subsequent analyses of the same transactions access cached data, eliminating network variability.
+
+The performance results reported in Chapter~\ref{ch:results} use this cached dataset, isolating algorithmic efficiency from network factors.
+
+\subsection{Performance Optimizations}
+
+Several optimizations improve \ToolName's performance:
+
+\begin{itemize}
+    \item \textbf{Probabilistic bytecode matching}: In Algorithm~\ref{algo:author-resolution}, checking whether a parent's input contains a contract's init code could be expensive for large contracts (up to 24KB). We employ a probabilistic heuristic, checking for a fixed number of 8-byte slices at corresponding offsets, achieving significant speedup without practical accuracy loss.
+    
+    \item \textbf{Configurable detection depth}: Algorithm~\ref{algo:detect-reentrancy} can be configured to return immediately upon first detection (for latency-sensitive applications) or continue to find all recursive iterations (for comprehensive analysis).
+    
+    \item \textbf{Thread parallelization}: Independent transactions can be analyzed in parallel across multiple threads.
+\end{itemize}
+
+\subsection{Multi-Chain Support}
+
+\ToolName\ supports analysis across \integer{FpChainCount} EVM-compatible blockchains. However, ``EVM-compatibility'' does not guarantee uniform API support. We encountered significant fragmentation:
+\begin{itemize}
+    \item Inconsistent availability of \lstinline{debug_traceTransaction}
+    \item Data format variations (\eg undefined fields, different nesting structures)
+    \item Coverage limitations from commercial providers
+\end{itemize}
+
+We address these through chain-specific normalization logic that handles known discrepancies.
+
+% ============================================================================
+\section{Summary: Manual to Automated Mapping}
+\label{sec:meth-summary}
+
+Table~\ref{tab:method-mapping} summarizes the correspondence between manual analysis steps and their automated implementations.
+
+\input{assets/tables/manual-vs-automated.tex}
+
+The unified methodology presented in this chapter demonstrates how the challenges of manual analysis directly inform automated solutions. In the following chapter, we present results from both perspectives: the empirical findings from manual analysis and the evaluation of \ToolName's automated approach.

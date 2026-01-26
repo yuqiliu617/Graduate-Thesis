@@ -1,0 +1,171 @@
+\chapter{Related Work}
+\label{ch:related-work}
+
+This chapter surveys existing approaches to reentrancy detection and smart contract security analysis. We categorize prior work into proactive detection methods (static and dynamic analysis), empirical security studies, and post-mortem analysis approaches. For each category, we discuss key contributions, identify limitations, and position our work within the research landscape.
+
+% ============================================================================
+\section{Proactive Detection Approaches}
+\label{sec:rw-proactive}
+
+The majority of reentrancy research has focused on proactive detection---identifying vulnerabilities before they are exploited. These approaches can be broadly categorized into static analysis, which examines code without execution, and dynamic analysis, which monitors runtime behavior.
+
+\subsection{Static Analysis}
+\label{sec:rw-static}
+
+Static analysis tools examine smart contract source code or bytecode to identify potential vulnerabilities without executing the contract. Several foundational tools have been developed for reentrancy detection.
+
+\textbf{Symbolic Execution.} Oyente~\cite{oyente}, one of the earliest smart contract analyzers, uses symbolic execution to explore possible execution paths and identify vulnerability patterns. Manticore~\cite{manticore} provides a similar symbolic execution framework with improved scalability. These tools construct symbolic representations of program states and systematically explore path conditions to detect vulnerable patterns.
+
+\textbf{Intermediate Representation Analysis.} Slither~\cite{slither} introduced SlithIR, an intermediate representation for Solidity that enables more sophisticated analysis than raw bytecode or AST examination. Slither includes dedicated detectors for various vulnerability classes, including reentrancy. Its modular architecture has made it widely adopted in industry for smart contract auditing.
+
+\textbf{Formal Verification.} Tools like Zeus~\cite{zeus}, Securify~\cite{securify}, and Vandal~\cite{vandal} apply formal verification techniques with predefined security policies. These approaches translate contracts into logical formulas and use theorem provers or constraint solvers to verify whether security properties hold. While theoretically powerful, formal verification approaches often face scalability challenges with complex contracts.
+
+\textbf{Limitations of Static Analysis.} Despite their contributions, static analysis tools face several fundamental limitations when applied to reentrancy detection:
+
+\begin{enumerate}
+    \item \textbf{Cross-contract blindness}: Most tools analyze contracts in isolation, failing to model interactions with external contracts. Since modern reentrancy attacks frequently involve cross-contract interactions (\eg proxy patterns, protocol composability), this limitation is increasingly problematic.
+    
+    \item \textbf{Pattern rigidity}: Detection heuristics are often tuned to specific vulnerability signatures observed in early attacks, like the \lstinline{fallback} function. As attackers evolve their techniques, these fixed patterns fail to generalize.
+    
+    \item \textbf{High false positive rates}: The imprecision inherent in static overapproximation leads to numerous false positives, reducing practical utility. Ghaleb~\etal~\cite{survey:static-analysis} found substantial false positive rates across six widely-used static analyzers.
+\end{enumerate}
+
+\subsection{Dynamic Analysis}
+\label{sec:rw-dynamic}
+
+Dynamic analysis approaches monitor contract behavior during execution to detect vulnerabilities or active exploitation. These methods can observe actual runtime behavior but require execution coverage.
+
+\textbf{Runtime Monitoring.} Sereum~\cite{sereum} implements taint analysis integrated into the Ethereum client, tracking data flows during transaction execution to detect suspicious reentrancy patterns. When potential attacks are detected, Sereum can intervene to prevent exploitation. However, this approach requires modifications to the underlying blockchain infrastructure, limiting practical deployment.
+
+\textbf{Fuzzing.} ReGuard~\cite{reguard} and ContractFuzzer~\cite{contractfuzzer} use fuzzing techniques to generate test inputs and observe execution traces for vulnerability indicators. Fuzzing can discover unexpected behaviors but faces challenges with complex input formats and the stateful nature of smart contracts~\cite{fuzzing-review}. Achieving adequate coverage of realistic scenarios remains difficult.
+
+\textbf{Limitations of Dynamic Analysis.} Dynamic approaches face their own challenges:
+
+\begin{enumerate}
+    \item \textbf{Post-deployment only}: Vulnerabilities can only be detected during or after execution, limiting preventive utility.
+    
+    \item \textbf{Coverage limitations}: Fuzzing struggles to achieve adequate path coverage in complex contracts, potentially missing vulnerabilities.
+    
+    \item \textbf{Infrastructure requirements}: Runtime monitoring tools like Sereum require modifications to node software, creating deployment barriers.
+    
+    \item \textbf{Scalability}: Transaction-level monitoring at blockchain scale is computationally expensive.
+\end{enumerate}
+
+\subsection{Attacker-Focused Detection}
+\label{sec:rw-attacker}
+
+Recognizing limitations in vulnerability-focused approaches, some researchers have proposed detecting attacks by analyzing attacker behavior rather than victim vulnerabilities.
+
+\textbf{Attack Contract Detection.} Roychoudhury~\etal~\cite{attack-contract-detection} (BlockWatchdog) analyzed patterns in attacker contracts to identify potential attacks before execution. Their approach identifies suspicious contract deployments by examining bytecode patterns characteristic of attack contracts, potentially enabling preemptive intervention.
+
+\textbf{Cross-Contract Interaction Analysis.} Zhang~\etal~\cite{smartreco} (SmartReco) and Grundy~\etal~\cite{clairvoyance} (Clairvoyance) proposed tools for analyzing cross-contract interactions, recognizing that many modern vulnerabilities emerge from contract compositions rather than isolated flaws.
+
+\textbf{Limitations.} Attacker-focused approaches face a fundamental challenge: attackers can adapt to evade detection. As we document in Chapter~\ref{ch:results}, a growing fraction of attacks now deploy malicious contracts within the exploit transaction itself, making preemptive contract detection impossible. This cat-and-mouse dynamic limits the long-term effectiveness of pattern-based attacker identification.
+
+% ============================================================================
+\section{Empirical Security Studies}
+\label{sec:rw-empirical}
+
+Complementing tool development, empirical studies have sought to understand smart contract security through systematic analysis of real-world data.
+
+\subsection{Tool Evaluation Studies}
+
+Several benchmarking studies have evaluated the effectiveness of existing detection tools, revealing significant limitations.
+
+Ghaleb~\etal~\cite{survey:static-analysis} assessed six widely-used static analyzers on synthetic contracts with known vulnerabilities et found substantial false positive and negative rates across all tools. Their results highlighted the gap between tool claims and practical performance.
+
+Zheng~\etal~\cite{turn-the-rudder} evaluated five major tools on real Ethereum transactions, finding false positive rates up to 99.8\% and failures to detect non-classic reentrancy patterns. Particularly concerning was the tools' inability to detect attacks that deviated from the canonical \lstinline{call.value} reentrancy pattern.
+
+These benchmarking studies reveal a troubling disconnect between academic tool development and real-world effectiveness. Tools optimized for synthetic benchmarks may perform poorly on the complex, evolving patterns found in actual attacks.
+
+\subsection{Attack Dataset Studies}
+
+Prior work has compiled datasets of smart contract security incidents for research purposes. Sources include curated repositories by white-hat researchers~\cite{reentrancy-list-pcaversaccio}, commercial security firm records~\cite{blocksec-security-incidents}, and community archives~\cite{slowmist-hacked}.
+
+However, most empirical studies using these datasets have been limited in scope:
+\begin{itemize}
+    \item Focus on high-level statistics (\eg total losses) rather than detailed attack characterization
+    \item Restrict analysis to single blockchains (typically Ethereum)
+    \item Lack systematic methodology for attack classification
+    \item Provide snapshots rather than longitudinal trend analysis
+\end{itemize}
+
+Chen~\etal~\cite{turn-the-rudder} provided some classification of real-world attacks but with limited depth. Huang~\etal~\cite{attack-contract-detection} identified common patterns in attack contracts but did not comprehensively analyze attack mechanics.
+
+\subsection{Gap in Comprehensive Empirical Analysis}
+
+Despite the wealth of available incident data, no prior work has conducted a comprehensive empirical analysis of real-world reentrancy attacks that:
+\begin{enumerate}
+    \item Examines a substantial number of confirmed incidents across multiple blockchains
+    \item Analyzes attacks across multiple dimensions systematically
+    \item Provides both qualitative case studies and quantitative trend analysis
+    \item Tracks the evolution of attack techniques over time
+    \item Develops a formal taxonomy of attack characteristics
+\end{enumerate}
+
+This gap motivates the empirical study presented in Chapter~\ref{ch:methodology} and Chapter~\ref{ch:results} of this thesis.
+
+% ============================================================================
+\section{Post-Mortem Analysis}
+\label{sec:rw-postmortem}
+
+When an attack occurs, security practitioners must analyze exploit transactions to understand what happened, identify the vulnerability, and develop fixes. This post-mortem analysis is critical for incident response.
+
+\subsection{Current State: Manual Analysis}
+
+Currently, post-mortem analysis relies entirely on manual investigation by security experts. The typical workflow involves:
+\begin{enumerate}
+    \item Retrieving the exploit transaction's call trace through debugging endpoints
+    \item Manually navigating the potentially deep and complex call stack
+    \item Identifying where the reentrancy pattern occurs
+    \item Locating the vulnerable code in the victim contract
+    \item Characterizing the attack, including its scope, entry point, and strategy
+    \item Documenting findings in post-mortem reports
+\end{enumerate}
+
+This process is time-intensive---a single complex attack can require days of expert analysis. Security firms like BlockSec, SlowMist, and Trail of Bits regularly publish post-mortem analyses, but the manual nature limits throughput.
+
+\subsection{Consequences of Manual Bottleneck}
+
+The reliance on manual analysis creates several problems:
+\begin{itemize}
+    \item \textbf{Delayed incident response}: Days pass before attack mechanics are understood
+    \item \textbf{Copycat attacks}: Other attackers can utilize the time gap to launch similar attacks targeting other protocols with similar vulnerabilities
+    \item \textbf{Inconsistent classification}: Different analysts may characterize the same attack differently without formal standards
+    \item \textbf{Expertise barrier}: Accurate analysis requires scarce domain expertise
+\end{itemize}
+
+\subsection{Gap in Automated Post-Mortem Analysis}
+
+Despite the clear need, no prior work has developed automated tools for post-mortem reentrancy analysis. Existing research focuses on proactive detection (before exploitation) rather than reactive analysis (after exploitation).
+
+This gap is significant because:
+\begin{enumerate}
+    \item \textbf{Proactive detection has failed}: As documented above, existing detection tools demonstrate poor real-world performance
+    \item \textbf{Attacks will continue}: Even with improved detection, some attacks will succeed
+    \item \textbf{Understanding enables defense}: Rapid, accurate post-mortem analysis enables faster response and informed defensive improvements
+    \item \textbf{Research requires scale}: Comprehensive empirical studies require efficient analysis of many incidents
+\end{enumerate}
+
+The \ToolName\ tool presented in this thesis directly addresses this gap, automating the key steps of post-mortem reentrancy analysis.
+
+% ============================================================================
+\section{Positioning This Research}
+\label{sec:rw-positioning}
+
+Table~\ref{tab:related-work-comparison} summarizes how this thesis relates to prior work across key dimensions.
+
+\input{assets/tables/literature-comparison-table.tex}
+
+Our work is distinguished by:
+\begin{enumerate}
+    \item \textbf{Comprehensive empirical analysis}: A large-scale, multi-dimensional study of real-world reentrancy attacks (see Section~\ref{sec:intro-contributions})
+    \item \textbf{Automated post-mortem focus}: The first tool designed specifically for post-mortem exploit analysis rather than proactive detection
+    \item \textbf{Integration of approaches}: A unified methodology where empirical investigation informs tool design and tool capabilities enable further empirical study
+\end{enumerate}
+
+% ============================================================================
+\section{Chapter Summary}
+\label{sec:rw-summary}
+
+Existing static and dynamic analysis tools for reentrancy detection suffer from cross-contract blindness, pattern rigidity, and high false positive rates. Empirical studies have compiled datasets but lack comprehensive attack characterization. Critically, post-mortem analysis remains entirely manual. This thesis addresses these gaps through comprehensive empirical investigation and automated post-mortem analysis. The following chapter presents our methodology.

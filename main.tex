@@ -1,99 +1,54 @@
 %%
-%% This is file `ubcsample.tex',
-%% generated with the docstrip utility.
-%
-% The original source files were:
-%
-% ubcthesis.dtx  (with options: `ubcsampletex')
-%% 
-%% This file was generated from the ubcthesis package.
-%% --------------------------------------------------------------
-%% 
-%% Copyright (C) 2001
-%% Michael McNeil Forbes
-%% mforbes@alum.mit.edu
-%% 
-%% This file may be distributed and/or modified under the
-%% conditions of the LaTeX Project Public License, either version 1.2
-%% of this license or (at your option) any later version.
-%% The latest version of this license is in
-%%    http://www.latex-project.org/lppl.txt
-%% and version 1.2 or later is part of all distributions of LaTeX
-%% version 1999/12/01 or later.
-%% 
-%% This program is distributed in the hope that it will be useful,
-%% but WITHOUT ANY WARRANTY; without even the implied warranty of
-%% MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-%% LaTeX Project Public License for more details.
-%% 
-%% This program consists of the files ubcthesis.dtx, ubcthesis.ins, and
-%% the sample figures fig.eps and fig.fig.
-%% 
-%% This file may be modified and used as a base for your thesis without
-%% including the licence agreement as long as the content (i.e. textual
-%% body) of the file is completely rewritten. You must, however, change
-%% the name of the file.
-%% 
-%% This file may only be distributed together with a copy of this
-%% program. You may, however, distribute this program without generated
-%% files such as this one.
-%% 
+%% Master's Thesis: The Evolution and Automated Analysis of Reentrancy Attacks on EVM Blockchains
+%% Yuqi Liu, University of British Columbia
+%%
 
-% This Sample thesis requires \LaTeX2e
 \NeedsTeXFormat{LaTeX2e}[1995/12/01]
-\ProvidesFile{ubcsample.tex}[2015/05/31 v1.72 ^^J
- University of British Columbia Sample Thesis]
-% This is the \documentclass[]{} command.  The manditory argument
-% specifies the "flavour" of thesis (ubcthesis for UBC).  The
-% optional arguments (in []) specify options that affect how the
-% thesis is displayed.  Please see the ubcthesis documentation for
-% details about the options.
 \documentclass[msc,oneside]{ubcthesis}
-%
-% To compile this sample thesis, issue the following commands:
-% latex ubcsample
-% bibtex ubcsample
-% latex ubcsample
-% latex ubcsample
-% latex ubcsample
-%
-% To view use xdvi (on unix systems):
-% xdvi ubcsample.dvi
-%
-% To make a postscript file, use dvips:
-% dvips -o ubcsample.ps ubcsample.dvi
-%
-% To view the postscript file, use ghostview or gv (on unix systems):
-% gv ubcsample.ps
-%
 
+% ============================================================================
+% Packages
+% ============================================================================
 \usepackage{afterpage}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{array}
 \usepackage{float}
-\usepackage[subfigure, titles]{tocloft}
+\usepackage{graphicx}
+\usepackage{here}
 \usepackage{listings}
 \usepackage{longtable}
-\usepackage{graphicx}
-\usepackage{subfigure}
-\usepackage{here}
-\usepackage{pdflscape}
+\usepackage{multirow}
 \usepackage[numbers,sort&compress]{natbib}
+\usepackage{pdflscape}
 \usepackage{psfrag}
+\usepackage{siunitx}
+\usepackage{subcaption}
+\usepackage[titles]{tocloft}
+\usepackage{tcolorbox}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{xfp}
+\usepackage[inline]{enumitem}
 \usepackage[unicode=true,
   linktocpage,
   linkbordercolor={0.5 0.5 1},
   citebordercolor={0.5 1 0.5},
   linkcolor=blue]{hyperref}
 
-%******** setspace *******************************
-% The setspace package allows you to manually set the spacing of the
-% file.  UBC may require 1.5 spacing for microfilming of theses.  In
-% this case you may obtain this by including this package and issuing
-% one of the following commands:
-%\usepackage{setspace}
-%\singlespacing
-%\onehalfspacing
-%\doublespacing
+% ============================================================================
+% Custom Commands and Variables
+% ============================================================================
+\input{includes/solidity-highlighting}
+\input{includes/commands}
+\input{includes/variables}
 
+% Graphics path
+\graphicspath{{assets/images/}}
+
+% ============================================================================
+% Thesis Metadata
+% ============================================================================
 \institution{The University Of British Columbia}
 \faculty{The Faculty of Applied Science}
 \institutionaddress{Vancouver}
@@ -101,23 +56,17 @@
 \degreetitle{Master of Applied Science}
 
 \title{The Evolution and Automated Analysis of Reentrancy Attacks on EVM Blockchains}
-% \subtitle{With a Subtitle}
 \author{Yuqi Liu}
 \copyrightyear{2026}
 \submitdate{\monthname\ \number\year}
-
 \program{Computer Engineering}
 
-% These commands are presently not required for UBC theses as the
-% advisor's name and title are not presently required anywhere.
 \advisor{Karthik Pattabiraman}
 \advisortitle{Professor of Electrical and Computer Engineering}
 
-% One might want to override the format of the section and chapter
-% numbers.  This shows you how to do it.  Note that the current
-% format is acceptable for submission to the FoGS: If you wish to modify
-% these, you should check with the FoGS explicity. prior to making
-% the modifications.
+% ============================================================================
+% Document Structure Configuration
+% ============================================================================
 \renewcommand\thepart         {\Roman{part}}
 \renewcommand\thechapter      {\arabic{chapter}}
 \renewcommand\thesection      {\thechapter.\arabic{section}}
@@ -127,72 +76,41 @@
 \renewcommand\thesubparagraph {\theparagraph.\arabic{subparagraph}}
 
 \setcounter{tocdepth}{2}
-\setcounter{secnumdepth}{2}
+\setcounter{secnumdepth}{3}
 
-% Here is an example of a "Program" environment defined with the
-% "float" package.  The list of programs will be stored in the file
-% ubcsample.lop and the numbering will start with the chapter
-% number.  The style will be "ruled".
-\floatstyle{ruled}
-\newfloat{Program}{htbp}{lop}[chapter]
-
-% Here is the start of the document.
+% ============================================================================
+% Document Content
+% ============================================================================
 \begin{document}
 
-%% This starts numbering in Roman numerals as required for the thesis
-%% style and is mandatory.
 \frontmatter
 
-%%% The order of the following components should be preserved.  The order
-%%% listed here is the order currently required by FoGS:        \\
-%%% Title (Mandatory)                                           \\
-%%% Preface (Manditory if any collaborator contributions)       \\
-%%% Abstract (Mandatory)                                        \\
-%%% List of Contents, Tables, Figures, etc. (As appropriate)    \\
-%%% Acknowledgements (Optional)                                 \\
-%%% Dedication (Optional)                                       \\
-
-\maketitle                      %% Mandatory
+\maketitle
 
 \clearpage
 
-%%%THESIS APPROVAL PAGE - REQUIRED AS PART OF YOUR COMPLETED THESIS
-
-%%%%%%% UBC FoGPS Requires the following statements at the beginning of the thesis. There is a (separate) thesis approval form that has to be signed and dated by the same individuals listed here as approving the thesis. You will have to get ensure that your department submits that approval form before you will be able to create an account and upload your thesis onto ciRCle. 
-
+% ----------------------------------------------------------------------------
+% Thesis Approval Page
+% ----------------------------------------------------------------------------
 The following individuals certify that they have read, and recommend to the Faculty of Graduate and Postdoctoral Studies for acceptance, the thesis entitled:
 
-%[Thesis title]
 \bigskip\noindent
-\hrulefill
-
+\textbf{The Evolution and Automated Analysis of Reentrancy Attacks on EVM Blockchains}
 
 \bigskip\noindent
-submitted by
-%Your name
-\hrulefill
-\bigskip\noindent
-in partial fulfillment of the requirements for
+submitted by \textbf{Yuqi Liu} in partial fulfillment of the requirements for
 
 \bigskip\noindent
-the degree of \hrulefill
-
-%MSc/PhD 
-\bigskip\noindent
-in
-\hrulefill
+the degree of \textbf{Master of Applied Science}
 
 \bigskip\noindent
-\textbf{[Include titles, departments, and universities, or titles and organizations. Remember to remove ALL material in square brackets [  ] before adding the page to your thesis.] Modify the examining committee to adapt to your case.}
+in \textbf{Computer Engineering}
 
-\bigskip\noindent
+\bigskip\bigskip\noindent
 \textbf{Examining Committee:}
 
 \bigskip\noindent
-Co-supervisor: \hrulefill
-
-\bigskip\noindent
-Co-supervisor: \hrulefill
+Supervisor: Karthik Pattabiraman, Professor, Electrical and Computer Engineering, UBC
 
 \bigskip\noindent
 Supervisory Committee Member: \hrulefill
@@ -200,91 +118,71 @@ Supervisory Committee Member: \hrulefill
 \bigskip\noindent
 Additional Examiner: \hrulefill
 
-
-\bigskip\noindent
-Additional Supervisory Committee Members:
-
-\bigskip\noindent
-Supervisory Committee Member:\hrulefill
-
-
 \clearpage
 
-\begin{abstract} % Maximum 350 words
-  The \texttt{genthesis.cls} \LaTeX{} class file and accompanying
-  documents, such as this sample thesis, are distributed in the hope
-  that it will be useful but without any warranty (without even the
-  implied warranty of fitness for a particular purpose).  For a
-  description of this file's purpose, and instructions on its use, see
-  below.
-
-  These files are distributed under the GPL which should be included
-  here in the future.  Please let the author know of any changes or
-  improvements that should be made.\footnote{This thesis template was uploaded to OverLeaf in 2021 by UBC MSc student Naba Mukhtar, and modified to recent UBC requirements by Leah Edelstein-Keshet, September 2021.}
-
-  Michael Forbes.
-  mforbes@physics.ubc.ca, michael.forbes@wsu.edu
+% ----------------------------------------------------------------------------
+% Abstract
+% ----------------------------------------------------------------------------
+\begin{abstract}
+\input{chapters/abstract}
 \end{abstract}
 
-\include{chapters/summary}
+% ----------------------------------------------------------------------------
+% Lay Summary
+% ----------------------------------------------------------------------------
+\chapter{Lay Summary}
+\input{chapters/lay_summary}
 
-\include{chapters/preface}
+% ----------------------------------------------------------------------------
+% Preface
+% ----------------------------------------------------------------------------
+\input{chapters/preface}
 
-\tableofcontents                %% Mandatory
-\listoftables                   %% Mandatory if thesis has tables
-\listoffigures                  %% Mandatory if thesis has figures
-\listof{Program}{List of Programs} %% Optional
-%% Any other lists should come here, i.e.
-%% Abbreviation schemes, definitions, lists of formulae, list of
-%% schemes, glossary, list of symbols etc.
+% ----------------------------------------------------------------------------
+% Table of Contents
+% ----------------------------------------------------------------------------
+\tableofcontents
+\listoftables
+\listoffigures
 
-\include{chapters/acknowledgements}
+% ----------------------------------------------------------------------------
+% Acknowledgements
+% ----------------------------------------------------------------------------
+\input{chapters/acknowledgements}
 
-\include{chapters/dedication}
+% ----------------------------------------------------------------------------
+% Dedication (Optional)
+% ----------------------------------------------------------------------------
+% \input{chapters/dedication}
 
-% Any other unusual prefactory material should come here before the
-% main body.
-
-% Now regular page numbering begins.
+% ============================================================================
+% Main Content
+% ============================================================================
 \mainmatter
 
-\include{chapters/chapter1}
+\include{chapters/chapter1_introduction}
+\include{chapters/chapter2_background}
+\include{chapters/chapter3_related_work}
+\include{chapters/chapter4_methodology}
+\include{chapters/chapter5_results}
+\include{chapters/chapter6_discussion}
 
-\include{chapters/chapter2}
-
-\include{chapters/landscape}
-
-%% This file is setup to use a bibtex file sample.bib and uses the
-%% plain style.  Other styles may be used depending on the conventions
-%% of your field of study.
-%%
-%%% Note: the bibliography must come before the appendices.
-\bibliographystyle{plain}
+% ============================================================================
+% Bibliography
+% ============================================================================
+\bibliographystyle{IEEEtran}
 \bibliography{reference}
 
-%% Use this to reset the appendix counter.  Note that the FoGS
-%% requires that the word ``Appendices'' appear in the table of
-%% contents either before each appendix lable or as a division
-%% denoting the start of the appendices.  We take the latter option
-%% here.  This is ensured by making the \texttt{appendicestoc} option
-%% a default option to the UBC thesis class.
-
-%%% If you only have one appendix, please uncomment the following line.
-% \renewcommand{\appendicesname}{Appendix}
+% ============================================================================
+% Appendices
+% ============================================================================
 \appendix
-\include{chapters/appendix1}
+\include{chapters/appendix_dataset}
+\include{chapters/appendix_algorithms}
 
-\include{chapters/appendix2}
-
-%% This changes the headings and chapter titles (no numbers for
-%% example).
+% ============================================================================
+% Back Matter
+% ============================================================================
 \backmatter
 
-%% Indices come here if you have them.
-
-\include{chapters/additional_info}
-
 \end{document}
-\endinput
-%%
-%% End of file `ubcsample.tex'.

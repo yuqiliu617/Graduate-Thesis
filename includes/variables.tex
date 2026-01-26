@@ -44,7 +44,7 @@
 \setcounter{FpDatasetSize}{1077298}
 
 \newcounter{FpTrivialTxnCount}
-\setcounter{FpTrivialTxnCount}{\value{FpTxnCount}-\value{FpDatasetSize}}
+\setcounter{FpTrivialTxnCount}{\numexpr\value{FpTxnCount}-\value{FpDatasetSize}\relax}
 
 \newcounter{FpReentrancyCount}
 \setcounter{FpReentrancyCount}{1280}
