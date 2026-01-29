@@ -35,13 +35,15 @@
   linkbordercolor={0.5 0.5 1},
   citebordercolor={0.5 1 0.5},
   linkcolor=blue]{hyperref}
-
+\usepackage{todonotes}
 % ============================================================================
 % Custom Commands and Variables
 % ============================================================================
 \input{includes/solidity-highlighting}
 \input{includes/commands}
 \input{includes/variables}
+
+\newcommand{\karthik}[1]{\todo{KP: #1}}
 
 % Graphics path
 \graphicspath{{assets/images/}}
