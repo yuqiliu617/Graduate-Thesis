@@ -113,6 +113,7 @@ When interactions occur before effects, external contracts can re-invoke the vul
 
 Listing~\ref{listing:reentrancy-example} illustrates a canonical reentrancy vulnerability. The \lstinline{Victim} contract transfers Ether before updating the sender's balance. When the \lstinline{Attacker} contract receives Ether, its \lstinline{fallback} function re-invokes \lstinline{withdraw}. Since the balance has not been decremented, the check passes repeatedly, draining the victim's funds.
 
+\karthik{Explain line by line using line numbers. Also, where is this example taken from?}
 Formally, the fundamental pattern of a reentrancy attack can be expressed as:
 \begin{equation}
 V_1.f_{V_1} \rightarrow A.f_{A} \rightarrow V_2.f_{V_2}
@@ -206,3 +207,5 @@ The aftermath was unprecedented: the Ethereum community executed a controversial
 \end{itemize}
 
 Nearly a decade later, this assumption has proven unfounded. Attacks have continued, evolved, and in many ways grown more sophisticated. The gap between the attention reentrancy receives in security education and its continued exploitation in practice motivates the empirical investigation at the core of this thesis.
+\karthik{Rather than say this assumption was unfounded, perhaps we can say it has not held in practice.}
+
