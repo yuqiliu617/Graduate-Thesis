@@ -111,9 +111,8 @@ When interactions occur before effects, external contracts can re-invoke the vul
 
 \input{assets/code/reentrancy-example-code}
 
-Listing~\ref{listing:reentrancy-example} illustrates a canonical reentrancy vulnerability. The \lstinline{Victim} contract transfers Ether before updating the sender's balance. When the \lstinline{Attacker} contract receives Ether, its \lstinline{fallback} function re-invokes \lstinline{withdraw}. Since the balance has not been decremented, the check passes repeatedly, draining the victim's funds.
-
-\karthik{Explain line by line using line numbers. Also, where is this example taken from?}
+\hlc{Listing~\ref{listing:reentrancy-example} illustrates a canonical reentrancy vulnerability, adapted from the Solidity documentation's security considerations~\cite{solidity-security-considerations}. The \lstinline{Victim} contract (lines 1--9) maintains a per-address balance mapping (line 2). Its \lstinline{withdraw} function first checks that the caller has sufficient balance (line 4), then transfers the requested amount via a low-level \lstinline{call} (line 6). Crucially, the balance deduction (line 8) occurs \textit{after} the external call---violating the CEI pattern. The \lstinline{Attacker} contract (lines 11--22) exploits this ordering. Its \lstinline{attack} function (lines 13--16) initiates a withdrawal for the attacker's full deposited balance. When the \lstinline{Victim} transfers Ether, the \lstinline{Attacker}'s \lstinline{fallback} function (lines 17--21) is triggered. It checks whether the victim still holds sufficient funds (line 19) and, if so, re-enters \lstinline{withdraw} (line 21). Since the balance was not yet decremented, the check on line 4 passes again, allowing repeated withdrawals until the victim is drained.}
+%\karthik{Explain line by line using line numbers. Also, where is this example taken from?}
 Formally, the fundamental pattern of a reentrancy attack can be expressed as:
 \begin{equation}
 V_1.f_{V_1} \rightarrow A.f_{A} \rightarrow V_2.f_{V_2}
@@ -206,6 +205,6 @@ The aftermath was unprecedented: the Ethereum community executed a controversial
     \item Created an assumption that reentrancy was a ``solved'' problem
 \end{itemize}
 
-Nearly a decade later, this assumption has proven unfounded. Attacks have continued, evolved, and in many ways grown more sophisticated. The gap between the attention reentrancy receives in security education and its continued exploitation in practice motivates the empirical investigation at the core of this thesis.
-\karthik{Rather than say this assumption was unfounded, perhaps we can say it has not held in practice.}
+Nearly a decade later, \hlc{this assumption has not held in practice}. Attacks have continued, evolved, and in many ways grown more sophisticated. The gap between the attention reentrancy receives in security education and its continued exploitation in practice motivates the empirical investigation at the core of this thesis.
+%\karthik{Rather than say this assumption was unfounded, perhaps we can say it has not held in practice.}
 

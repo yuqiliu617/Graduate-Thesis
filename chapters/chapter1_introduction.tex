@@ -11,8 +11,8 @@ However, the immense value secured by smart contracts has made them attractive t
 
 A reentrancy attack occurs when a vulnerable contract makes an external call to an untrusted address before properly updating its internal state. The receiving contract can exploit this window of inconsistency by invoking a callback into the victim contract, which then operates on stale state information. This recursive exploitation pattern can lead to unauthorized fund extraction, state manipulation, and other malicious outcomes.
 
-The most infamous reentrancy incident, the DAO attack of June 2016, resulted in approximately \$60 million in losses and prompted an unprecedented hard fork of the Ethereum blockchain~\cite{the-dao-analysis}. One might expect that such a high-profile incident would have motivated sufficient defensive measures to render reentrancy attacks obsolete. 
-\karthik{This may be misleading; there was work on defenses, correct? Perhaps say that first and then say one would expect these should have mitigated them.}
+The most infamous reentrancy incident, the DAO attack of June 2016, resulted in approximately \$60 million in losses and prompted an unprecedented hard fork of the Ethereum blockchain~\cite{the-dao-analysis}. \hlc{The incident catalyzed significant defensive efforts: the Checks-Effects-Interactions coding pattern became standard practice~\cite{checks-effects-interactions}, language-level reentrancy guards were introduced, and numerous static and dynamic analysis tools were developed to detect reentrancy vulnerabilities~\cite{oyente, slither, sereum}. One might expect that such extensive defenses would have mitigated the threat.}
+%\karthik{This may be misleading; there was work on defenses, correct? Perhaps say that first and then say one would expect these should have mitigated them.}
 Yet nearly a decade later, these attacks continue to occur with alarming regularity. Our analysis documents at least \integer{ReentrancyCount} confirmed reentrancy incidents across EVM-compatible blockchains between 2016 and 2024, with a frequency exceeding 1.5 attacks per month since mid-2021.
 
 We therefore ask: \textit{Why do reentrancy attacks continue to succeed despite extensive research and numerous proposed defenses?} This thesis answers this question through comprehensive investigation, providing both the understanding and tooling necessary to address this enduring threat.
@@ -21,7 +21,9 @@ We therefore ask: \textit{Why do reentrancy attacks continue to succeed despite 
 \section{The Research Problem}
 \label{sec:intro-problem}
 
-The continued prevalence of reentrancy attacks despite significant academic attention \karthik{You need to first summarize this.} indicates fundamental gaps in both our understanding and our defensive capabilities. Three problems motivate this research.
+The continued prevalence of reentrancy attacks despite significant academic attention
+% \karthik{You need to first summarize this.} Summarized in the previous section
+indicates fundamental gaps in both our understanding and our defensive capabilities. Three problems motivate this research.
 
 \subsection{Outdated Understanding of Real-World Attacks}
 
@@ -31,14 +33,13 @@ The majority of academic research on reentrancy vulnerabilities was conducted be
     \item Target a single function within a single contract
     \item Use recursive pattern to withdraw funds directly
 \end{itemize}
-\karthik{There have been other studies that found this correct - perhaps mention this.}
-However, the attack landscape has evolved considerably since these assumptions were formulated. Preliminary observations suggest that modern attackers employ increasingly sophisticated techniques, exploit diverse entry points, and target complex multi-contract interactions. Without systematic empirical investigation of real-world attacks, the research community operates on potentially outdated assumptions that may not reflect current threats.
+%\karthik{There have been other studies that found this correct - perhaps mention this.}
+\hlc{These assumptions were reinforced by early studies and security guidelines~\cite{smart-contract-security-field-guide, rethinking-of-reentrancy}.} However, the attack landscape has evolved considerably since these assumptions were formulated. Preliminary observations suggest that modern attackers employ increasingly sophisticated techniques, exploit diverse entry points, and target complex multi-contract interactions. Without systematic empirical investigation of real-world attacks, the research community operates on potentially outdated assumptions that may not reflect current threats.
 
 \subsection{Detection Tool Limitations}
 
-Existing reentrancy detection tools have demonstrated limited effectiveness against modern attacks. Recent benchmark studies reveal troubling performance gaps: Zheng~\etal~\cite{turn-the-rudder} found that state-of-the-art tools suffered false positive rates up to 99.8\% when evaluated on real Ethereum transactions, while failing to detect non-classic reentrancy patterns. Similarly, Ghaleb~\etal~\cite{survey:static-analysis} documented substantial false positive and negative rates across six widely-used static analyzers.
-
-\karthik{I think you should specifically look at Reentrancy attack detection tools here.}
+Existing reentrancy detection tools have demonstrated limited effectiveness against modern attacks. \hlc{Prominent tools such as Oyente~\cite{oyente}, Slither~\cite{slither}, Securify~\cite{securify}, and Sereum~\cite{sereum} were designed primarily to detect classic single-function reentrancy patterns.} Recent benchmark studies reveal troubling performance gaps: Zheng~\etal~\cite{turn-the-rudder} found that state-of-the-art tools suffered false positive rates up to 99.8\% when evaluated on real Ethereum transactions, while failing to detect non-classic reentrancy patterns. Similarly, Ghaleb~\etal~\cite{survey:static-analysis} documented substantial false positive and negative rates across six widely-used static analyzers.
+%\karthik{I think you should specifically look at Reentrancy attack detection tools here.}
 
 These limitations stem from several factors:
 \begin{enumerate}
@@ -56,7 +57,8 @@ In the absence of effective automated detection, security practitioners must rel
     \item \textbf{Non-scalable}: Manual analysis cannot keep pace with the volume of transactions on modern blockchains
     \item \textbf{Expertise-dependent}: Accurate analysis requires deep domain knowledge that is scarce and expensive
 \end{itemize}
-\karthik{Need citations above. Also, do we show an example of manual analysis later in the thesis?}
+\hlc{We describe our own experience with this manual analysis process in detail in Section~\ref{sec:meth-manual}, where we outline the steps involved in analyzing each incident in our dataset.}
+%\karthik{Need citations above. Also, do we show an example of manual analysis later in the thesis?}
 
 This bottleneck hinders rapid incident response and delays the dissemination of vulnerability information. Copycat attackers can exploit the time gap between a new attack and the publication of analysis to launch subsequent attacks, exacerbating the consequences of the same vulnerabilities.
 
@@ -68,9 +70,9 @@ This thesis pursues three interconnected research objectives designed to address
 
 \begin{enumerate}
     \item \textbf{Systematically characterize real-world reentrancy attacks}: Conduct a comprehensive empirical analysis of confirmed reentrancy incidents to understand how these attacks manifest in practice, how they have evolved over time, and what characteristics define modern threats.
-    
+
     \item \textbf{Automate reentrancy exploit analysis}: Develop an automated tool capable of detecting reentrancy patterns in transaction call traces and extracting key exploit characteristics, thereby eliminating the manual analysis bottleneck.
-    
+
     \item \textbf{Synthesize insights from manual and automated analysis}: Integrate findings from both empirical investigation and automated large-scale analysis to develop a comprehensive understanding that neither approach could achieve alone.
 \end{enumerate}
 
@@ -86,7 +88,9 @@ To achieve the stated objectives, we employ a two-phase research approach in whi
 
 The first phase involves systematic manual analysis of real-world reentrancy attacks. We compile a comprehensive dataset of \integer{ReentrancyCount} confirmed incidents from 2016 to 2024, sourced from security researcher repositories~\cite{reentrancy-list-pcaversaccio}, commercial security firm records~\cite{blocksec-security-incidents}, and community-maintained archives~\cite{slowmist-hacked}.
 
-For each incident, two researchers independently analyze the exploit transaction's call trace and token flows, identify the reentrancy pattern and vulnerability, and characterize the attack along multiple dimensions. This analysis employs an open coding methodology to develop a taxonomy of attack strategies, entry points, and scope classifications. \karthik{We should cite open-coding papers and ensure our methodology is in line with theirs. }Cross-validation ensures consistency and reduces bias.
+For each incident, two researchers independently analyze the exploit transaction's call trace and token flows, identify the reentrancy pattern and vulnerability, and characterize the attack along multiple dimensions. This analysis employs an \hlc{open coding methodology~\cite{open-coding:strauss-corbin, open-coding:saldana}} to develop a taxonomy of attack strategies, entry points, and scope classifications.
+%\karthik{We should cite open-coding papers and ensure our methodology is in line with theirs. }
+Cross-validation ensures consistency and reduces bias.
 
 The empirical investigation yields both qualitative insights---through detailed case studies of notable attacks---and quantitative trends---through statistical analysis across seven dimensions: blockchain network, reentrancy scope, entry point, financial impact, attack strategy, vulnerability origin, and exploitation timeline.
 
@@ -115,19 +119,19 @@ This thesis makes the following contributions:
 
 \begin{enumerate}
     \item \textbf{Comprehensive Empirical Analysis}: We present the most extensive empirical study of real-world reentrancy attacks to date, analyzing \integer{ReentrancyCount} confirmed incidents across multiple EVM-compatible blockchains from 2016 to 2024. This analysis provides unprecedented insight into how reentrancy attacks manifest and evolve in practice.
-    
+
     \item \textbf{Multi-Dimensional Attack Taxonomy}: We analyze attacks across seven dimensions (blockchain network, scope, entry point, financial impact, strategy, vulnerability origin, and timeline) and identify seven distinct attack strategies. This taxonomy provides a structured framework for understanding reentrancy threats.
-    
+
     \item \textbf{Automated Analysis Tool}: We introduce \ToolName, the first automated tool for detecting and characterizing reentrancy exploits in transaction call traces. \ToolName\ achieves \FirstRecall\ detection recall and \FirstCategorizationRecall\ characterization accuracy with analysis latency of approximately \integer{Latency} milliseconds.
-    
+
     \item \textbf{Novel Algorithms}: We contribute two novel algorithms fundamental to \ToolName's operation:
     \begin{itemize}
         \item An \textit{authorial provenance resolution} algorithm for grouping contracts by their originating author, enabling distinction between attacker and victim contracts
         \item A \textit{stateful trace traversal} algorithm for detecting reentrancy patterns in complex, deeply-nested call traces
     \end{itemize}
-    
+
     \item \textbf{Curated Datasets}: We release curated datasets including: (a)~the ground-truth exploit dataset with all \integer{AllTotal} exploit transactions from the analyzed incidents, and (b)~a random transaction dataset for false positive evaluation. These resources enable reproducible research and future investigation.
-    
+
     \item \textbf{Integrated Insights}: We synthesize findings from manual and automated analysis to challenge established assumptions, reveal the dual nature of reentrancy as both exploit vector and legitimate design pattern, and provide actionable guidance for developers, auditors, and researchers.
 \end{enumerate}
 
@@ -142,7 +146,7 @@ The remainder of this thesis is organized as follows:
 \textbf{Chapter~\ref{ch:related-work}} surveys related work in reentrancy detection and smart contract security. We review static and dynamic analysis approaches, discuss their limitations, and position our contributions within the existing research landscape.
 
 \textbf{Chapter~\ref{ch:methodology}} presents our unified research methodology. We describe the empirical study methodology for manual analysis and then show how each manual step naturally evolves into the automated algorithms implemented in \ToolName. This presentation emphasizes the direct connection between empirical observation and tool design.
-\karthik{This is good, but then we need to update our findings and insights to include both the manual and automated analysis.}
+% \karthik{This is good, but then we need to update our findings and insights to include both the manual and automated analysis.} % That's exactly how I organized the results chapter
 
 \textbf{Chapter~\ref{ch:results}} presents our findings and evaluation results. We first report the empirical findings from our manual analysis---including qualitative case studies and quantitative trends---then present the evaluation of \ToolName's accuracy, false positive rate, and performance. The chapter synthesizes insights from both perspectives.
 
