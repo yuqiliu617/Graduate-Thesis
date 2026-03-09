@@ -301,6 +301,10 @@ For benign reentrancy in the random dataset, typical latency is \textbf{\integer
 
 Given Ethereum's 15--20 average transactions per second~\cite{eth-chart}, an allowance of approximately 50 ms per transaction is available for real-time processing. \ToolName's typical \integer{Latency} ms latency demonstrates feasibility for real-time integration, assuming local node deployment (standard practice for production monitoring systems, eliminating network latency for trace retrieval).
 
+\fig[0.7]{latency-component}{Latency breakdown of \ToolName\ into computation and database I/O components (single thread)}
+
+\hlc{To understand the latency composition, Figure~\ref{fig:latency-component} decomposes the single-thread analysis time into computation and database I/O. Database I/O measures the execution time of SQL queries used to retrieve cached data, while computation encompasses algorithmic, conversion, and utility logic. For attack transactions, computation accounts for 55.0 ms and database I/O for 40.8 ms. On Ethereum, reentrancy transactions average 45.0 ms computation and 21.1 ms database I/O, while non-reentrancy transactions average 22.6 ms and 7.0 ms, respectively. Across all categories, computation is the dominant component, confirming that \ToolName's latency is algorithm-bound. Consequently, the reported figures represent an upper bound: deployment on faster hardware or a native-compiled implementation would yield substantially lower analysis times.}
+
 % ============================================================================
 \section{Synthesis: Complementary Insights}
 \label{sec:results-synthesis}

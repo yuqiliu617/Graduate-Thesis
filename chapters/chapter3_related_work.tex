@@ -24,9 +24,9 @@ Static analysis tools examine smart contract source code or bytecode to identify
 
 \begin{enumerate}
     \item \textbf{Cross-contract blindness}: Most tools analyze contracts in isolation, failing to model interactions with external contracts. Since modern reentrancy attacks frequently involve cross-contract interactions (\eg proxy patterns, protocol composability), this limitation is increasingly problematic.
-    
+
     \item \textbf{Pattern rigidity}: Detection heuristics are often tuned to specific vulnerability signatures observed in early attacks, like the \lstinline{fallback} function. As attackers evolve their techniques, these fixed patterns fail to generalize.
-    
+
     \item \textbf{High false positive rates}: The imprecision inherent in static overapproximation leads to numerous false positives, reducing practical utility. Ghaleb~\etal~\cite{survey:static-analysis} found substantial false positive rates across six widely-used static analyzers.
 \end{enumerate}
 
@@ -43,13 +43,18 @@ Dynamic analysis approaches monitor contract behavior during execution to detect
 
 \begin{enumerate}
     \item \textbf{Post-deployment only}: Vulnerabilities can only be detected during or after execution, limiting preventive utility.
-    
+
     \item \textbf{Coverage limitations}: Fuzzing struggles to achieve adequate path coverage in complex contracts, potentially missing vulnerabilities.
-    
+
     \item \textbf{Infrastructure requirements}: Runtime monitoring tools like Sereum require modifications to node software, creating deployment barriers.
-    
+
     \item \textbf{Scalability}: Transaction-level monitoring at blockchain scale is computationally expensive.
 \end{enumerate}
+
+\subsection{Transaction-Level Analysis}
+\label{sec:rw-transaction}
+
+\hlc{Several approaches analyze runtime transaction data rather than static source code or bytecode. TxSpector~\cite{txspector} replays Ethereum transactions to reconstruct bytecode-level execution traces, encodes data and control dependencies as Datalog-style logical relations, and applies user-defined rules to detect attacks. While it supports reentrancy detection among eight attack types, it is a generic framework requiring manual rule specification that does not provide automated role identification or attack characterization. Dynamit~\cite{dynamit} applies machine learning to runtime transaction metadata and balance data, classifying transactions as benign or malicious without requiring code instrumentation; however, it produces only binary classifications and does not characterize detected attacks. More recently, Xu~\etal~\cite{moe} uses Metric First-Order Temporal Logic (MFOTL) to formally specify diverse attack patterns for runtime monitoring. Though general-purpose and real-time capable, it requires writing formal specifications for each attack type and does not provide specialized post-mortem characterization of reentrancy mechanics.}
 
 \subsection{Attacker-Focused Detection}
 \label{sec:rw-attacker}
