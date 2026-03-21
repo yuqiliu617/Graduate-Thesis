@@ -54,7 +54,7 @@ Dynamic analysis approaches monitor contract behavior during execution to detect
 \subsection{Transaction-Level Analysis}
 \label{sec:rw-transaction}
 
-\hlc{Several approaches analyze runtime transaction data rather than static source code or bytecode. TxSpector~\cite{txspector} replays Ethereum transactions to reconstruct bytecode-level execution traces, encodes data and control dependencies as Datalog-style logical relations, and applies user-defined rules to detect attacks. While it supports reentrancy detection among eight attack types, it is a generic framework requiring manual rule specification that does not provide automated role identification or attack characterization. Dynamit~\cite{dynamit} applies machine learning to runtime transaction metadata and balance data, classifying transactions as benign or malicious without requiring code instrumentation; however, it produces only binary classifications and does not characterize detected attacks. More recently, Xu~\etal~\cite{moe} uses Metric First-Order Temporal Logic (MFOTL) to formally specify diverse attack patterns for runtime monitoring. Though general-purpose and real-time capable, it requires writing formal specifications for each attack type and does not provide specialized post-mortem characterization of reentrancy mechanics.}
+Several approaches analyze runtime transaction data rather than static source code or bytecode. TxSpector~\cite{txspector} replays Ethereum transactions to reconstruct bytecode-level execution traces, encodes data and control dependencies as Datalog-style logical relations, and applies user-defined rules to detect attacks. While it supports reentrancy detection among eight attack types, it is a generic framework requiring manual rule specification that does not provide automated role identification or attack characterization. Dynamit~\cite{dynamit} applies machine learning to runtime transaction metadata and balance data, classifying transactions as benign or malicious without requiring code instrumentation; however, it produces only binary classifications and does not characterize detected attacks. More recently, Xu~\etal~\cite{moe} uses Metric First-Order Temporal Logic (MFOTL) to formally specify diverse attack patterns for runtime monitoring. Though general-purpose and real-time capable, it requires writing formal specifications for each attack type and does not provide specialized post-mortem characterization of reentrancy mechanics.
 
 \subsection{Attacker-Focused Detection}
 \label{sec:rw-attacker}
@@ -128,7 +128,7 @@ Currently, post-mortem analysis relies entirely on manual investigation by secur
     \item Documenting findings in post-mortem reports
 \end{enumerate}
 
-This process is time-intensive---a single complex attack can require days of expert analysis. \hlc{Security firms like BlockSec~\cite{attack-report:hype-beans} and SlowMist~\cite{attack-report:lendf-me, attack-report:revest-finance} regularly publish post-mortem analyses}, but the manual nature limits throughput.
+This process is time-intensive---a single complex attack can require days of expert analysis. Security firms like BlockSec~\cite{attack-report:hype-beans} and SlowMist~\cite{attack-report:lendf-me, attack-report:revest-finance} regularly publish post-mortem analyses, but the manual nature limits throughput.
 %\karthik{Provide citations for the manual analysis and the other reports. }
 
 \subsection{Consequences of Manual Bottleneck}
