@@ -25,7 +25,6 @@
 \usepackage{psfrag}
 \usepackage{siunitx}
 \usepackage{subcaption}
-\usepackage[titles]{tocloft}
 \usepackage{tcolorbox}
 \usepackage[dvipsnames]{xcolor}
 \usepackage{xfp}
@@ -47,6 +46,11 @@
 
 % Graphics path
 \graphicspath{{assets/images/}}
+
+% Keep front-matter numbering sequential when a manual committee page is added.
+\makeatletter
+\let\@startabstracthook\@empty
+\makeatother
 
 % ============================================================================
 % Thesis Metadata
@@ -91,34 +95,50 @@
 
 \clearpage
 
+\thispagestyle{plain}
+
 % ----------------------------------------------------------------------------
 % Thesis Approval Page
 % ----------------------------------------------------------------------------
+\newcommand{\approvalline}[2][\textwidth]{%
+	\makebox[0pt][l]{\strut #2}%
+	\rule[-0.5ex]{#1}{0.4pt}%
+}
+
+\noindent
 The following individuals certify that they have read, and recommend to the Faculty of Graduate and Postdoctoral Studies for acceptance, the thesis entitled:
 
 \bigskip\noindent
-\textbf{The Evolution and Automated Analysis of Reentrancy Attacks on EVM Blockchains}
+{\small\approvalline{The evolution and automated analysis of reentrancy attacks on EVM blockchains}}
+
+\bigskip\bigskip\noindent
+\makebox[3cm][l]{submitted by}
+\approvalline[3cm]{Yuqi Liu}
+\hfill
+in partial fulfillment of the requirements for
 
 \bigskip\noindent
-submitted by \textbf{Yuqi Liu} in partial fulfillment of the requirements for
+\makebox[3cm][l]{the degree of}
+\approvalline[9.5cm]{Master of Applied Science}
 
 \bigskip\noindent
-the degree of \textbf{Master of Applied Science}
-
-\bigskip\noindent
-in \textbf{Electrical and Computer Engineering}
+\makebox[3cm][l]{in}
+\approvalline[9.5cm]{Electrical and Computer Engineering}
 
 \bigskip\bigskip\noindent
 \textbf{Examining Committee:}
 
 \bigskip\noindent
-Supervisor: Karthik Pattabiraman, Professor, Electrical and Computer Engineering, UBC
+{\small\approvalline{Karthik Pattabiraman, Professor, Electrical and Computer Engineering, UBC}}\\
+Supervisor
 
 \bigskip\noindent
-Supervisory Committee Member: Zehua Wang, Adjunct Professor, Electrical and Computer Engineering, UBC
+{\small\approvalline{Zehua Wang, Adjunct Professor, Electrical and Computer Engineering, UBC}}\\
+Supervisory Committee Member
 
 \bigskip\noindent
-Supervisory Committee Member: Matei Ripeanu, Professor, Electrical and Computer Engineering, UBC
+{\small\approvalline{Matei Ripeanu, Professor, Electrical and Computer Engineering, UBC}}\\
+Supervisory Committee Member
 
 \clearpage
 
