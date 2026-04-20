@@ -29,11 +29,13 @@
 \usepackage[dvipsnames]{xcolor}
 \usepackage{xfp}
 \usepackage[inline]{enumitem}
-\usepackage[unicode=true,
-  linktocpage,
-  linkbordercolor={0.5 0.5 1},
-  citebordercolor={0.5 1 0.5},
-  linkcolor=blue]{hyperref}
+\usepackage[
+	unicode=true,
+	linktocpage,
+	linkbordercolor={0.5 0.5 1},
+	citebordercolor={0.5 1 0.5},
+	linkcolor=blue
+]{hyperref}
 \usepackage{todonotes}
 % ============================================================================
 % Custom Commands and Variables
@@ -90,56 +92,14 @@
 \begin{document}
 
 \frontmatter
-
 \maketitle
-
 \clearpage
-
-\thispagestyle{plain}
 
 % ----------------------------------------------------------------------------
 % Thesis Approval Page
 % ----------------------------------------------------------------------------
-\newcommand{\approvalline}[2][\textwidth]{%
-	\makebox[0pt][l]{\strut #2}%
-	\rule[-0.5ex]{#1}{0.4pt}%
-}
-
-\noindent
-The following individuals certify that they have read, and recommend to the Faculty of Graduate and Postdoctoral Studies for acceptance, the thesis entitled:
-
-\bigskip\noindent
-{\small\approvalline{The evolution and automated analysis of reentrancy attacks on EVM blockchains}}
-
-\bigskip\bigskip\noindent
-\makebox[3cm][l]{submitted by}
-\approvalline[3cm]{Yuqi Liu}
-\hfill
-in partial fulfillment of the requirements for
-
-\bigskip\noindent
-\makebox[3cm][l]{the degree of}
-\approvalline[9.5cm]{Master of Applied Science}
-
-\bigskip\noindent
-\makebox[3cm][l]{in}
-\approvalline[9.5cm]{Electrical and Computer Engineering}
-
-\bigskip\bigskip\noindent
-\textbf{Examining Committee:}
-
-\bigskip\noindent
-{\small\approvalline{Karthik Pattabiraman, Professor, Electrical and Computer Engineering, UBC}}\\
-Supervisor
-
-\bigskip\noindent
-{\small\approvalline{Zehua Wang, Adjunct Professor, Electrical and Computer Engineering, UBC}}\\
-Supervisory Committee Member
-
-\bigskip\noindent
-{\small\approvalline{Matei Ripeanu, Professor, Electrical and Computer Engineering, UBC}}\\
-Supervisory Committee Member
-
+\thispagestyle{plain}
+\include{chapters/approval}
 \clearpage
 
 % ----------------------------------------------------------------------------
